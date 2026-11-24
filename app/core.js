@@ -113,7 +113,7 @@
   };
 
   /* ---------- 2. Loading the site's data ---------- */
-  const DATA = { items: [], byId: new Map(), cats: new Map(), media: new Map(), map: null, icons: { icons: {}, shapes: {} }, happenings: [] };
+  const DATA = { items: [], byId: new Map(), cats: new Map(), media: new Map(), map: null, icons: { icons: {}, shapes: {} }, happenings: [], routes: [] };
 
   async function loadAll() {
     const ev = (Q.get("event") || "").replace(/[^a-z0-9_-]/gi, "");
@@ -130,10 +130,11 @@
       const merged = {}; main.forEach(r => { if (r.KEY) merged[r.KEY.trim()] = r.VALUE || ""; });
       SITE = Object.assign(merged, SITE);
     }
-    const [items, cats, media, map, icons, haps] = await Promise.all([
-      getCSV("items.csv"), getCSV("categories.csv"), getCSV("media.csv"), getJSON("map.json"), getJSON("icons.json"), getCSV("happenings.csv")
+    const [items, cats, media, map, icons, haps, routes] = await Promise.all([
+      getCSV("items.csv"), getCSV("categories.csv"), getCSV("media.csv"), getJSON("map.json"), getJSON("icons.json"), getCSV("happenings.csv"), getJSON("routes.geojson")
     ]);
     DATA.happenings = haps;
+    DATA.routes = (routes && Array.isArray(routes.features)) ? routes.features.filter(f => f && f.properties && f.properties.ID) : [];
     if (EVENT) media.forEach(m => m.FILE && EVENT.media.add(m.FILE));
     DATA.map = map || { outline: null, overlays: [], backdrop: null };
     DATA.icons = icons || { icons: {}, shapes: {} };
@@ -298,8 +299,10 @@
     map.setStyle(styleFor(mode), { diff: false });
   }
 
+  const STYLE_HOOKS = [];
   function addOverlayLayers() {           // runs every time the background style changes
     if (!map) return;
+    STYLE_HOOKS.forEach(f => { try { f(map); } catch (e) { warn(e.message); } });
     const o = DATA.map && DATA.map.outline;
     if (o && !map.getSource("ets-outline")) {
       try {
@@ -919,6 +922,11 @@
     L, words: w => Object.keys(w).forEach(k => { if (!(k in WORDS)) WORDS[k] = w[k]; }),
     esc, yes, store, mediaUrl, svgI, colorFor, toast, warn, setUrl, goTo, highlight, renderControls,
     openSheetHtml, closeSheet, setSheet, get sheetState() { return SHEET.state; }, set onSheetClose(f) { SHEET.onClose = f; },
+    get map() { return map; },
+    onStyle(f) { STYLE_HOOKS.push(f); if (map && map.isStyleLoaded && map.isStyleLoaded()) { try { f(map); } catch (e) { warn(e.message); } } },
+    setPeek(px) { const sh = $("sheet"); if (px) sh.style.setProperty("--sheet-peek", px + "px"); else sh.style.removeProperty("--sheet-peek"); },
+    setTouring(on) { document.body.classList.toggle("touring", !!on); if (on) { closeMenus(); OPEN_GROUP = null; refreshMarkerVisibility(); } },
+    openCard, closeMenus, boundsOf, sheetPad, desktop,
     fitTo(ids) { const pts = ids.map(id => DATA.byId.get(id)).filter(i => i && i.hasPos).map(i => [i.lng, i.lat]);
       if (!map || !pts.length) return;
       if (pts.length === 1) map.easeTo({ center: pts[0], zoom: Math.max(map.getZoom(), 15), padding: { bottom: sheetPad(), top: 120, left: desktop() ? 420 : 0, right: 0 }, duration: REDUCED ? 0 : 600 });
@@ -942,6 +950,7 @@
     applyLook();
     makeMap();
     if (DATA.happenings.length) await loadFeature("happenings");
+    if (DATA.routes.length) await loadFeature("tours");
     renderControls();
     wireSheet();
     buildMarkers();

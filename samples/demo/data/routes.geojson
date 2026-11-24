@@ -1,4 +1,192 @@
 {
   "type": "FeatureCollection",
-  "features": []
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "ID": "TOUR-DOWNTOWN",
+        "TYPE": "tour",
+        "TITLE": "Downtown Walk (Sample)",
+        "INTRO": "A made-up walking tour through the sample downtown.",
+        "SUMMARY": "Five stops through the sample downtown, ending at the diner.",
+        "MODES": "walk",
+        "STYLE": "solid",
+        "COLOR": "#0B7A75",
+        "WIDTH": 6,
+        "OPACITY": 0.9,
+        "EFFORT": "Easy",
+        "STOPS": [
+          {
+            "ITEM": "SAMPLE-01-01",
+            "NOTE": "Start at the old courthouse steps."
+          },
+          {
+            "ITEM": "SAMPLE-01-02",
+            "NOTE": "Grab a snack at the market."
+          },
+          {
+            "ITEM": "SAMPLE-01-03",
+            "NOTE": ""
+          },
+          {
+            "ITEM": "SAMPLE-05",
+            "NOTE": "Here is where the sample flood story happened."
+          },
+          {
+            "ITEM": "SAMPLE-03",
+            "NOTE": "End with pie at the diner."
+          }
+        ]
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -98.5807,
+            39.8299
+          ],
+          [
+            -98.5779,
+            39.8299
+          ],
+          [
+            -98.5779,
+            39.8292
+          ],
+          [
+            -98.5779,
+            39.8269
+          ],
+          [
+            -98.5785,
+            39.8269
+          ],
+          [
+            -98.5785,
+            39.8243
+          ],
+          [
+            -98.5757,
+            39.8243
+          ],
+          [
+            -98.5837,
+            39.8243
+          ],
+          [
+            -98.5837,
+            39.8248
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ID": "TRAIL-RIVER",
+        "TYPE": "trail",
+        "TITLE": "River Trail (Sample)",
+        "INTRO": "A made-up trail drawn in the Rail style.",
+        "MODES": "hike",
+        "STYLE": "rail",
+        "COLOR": "#8B6F47",
+        "WIDTH": 14,
+        "OPACITY": 0.35,
+        "STOPS": []
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -98.5875,
+            39.8343
+          ],
+          [
+            -98.5835,
+            39.8333
+          ],
+          [
+            -98.5795,
+            39.8338
+          ],
+          [
+            -98.5755,
+            39.8328
+          ],
+          [
+            -98.5715,
+            39.8333
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ID": "LINE-RAIL",
+        "TYPE": "line",
+        "TITLE": "Old Rail Line (Sample)",
+        "STYLE": "dashed",
+        "COLOR": "#555555",
+        "WIDTH": 3,
+        "OPACITY": 1
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -98.5885,
+            39.8203
+          ],
+          [
+            -98.5705,
+            39.8363
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ID": "TOUR-LIGHTS",
+        "TYPE": "tour",
+        "TITLE": "Lights Walk Tour (Sample)",
+        "INTRO": "Only open while the Lights Walk is on.",
+        "MODES": "walk",
+        "AVAILABILITY": "event",
+        "STYLE": "dashed",
+        "COLOR": "#F59E0B",
+        "WIDTH": 5,
+        "OPACITY": 1,
+        "STOPS": [
+          {
+            "ITEM": "SAMPLE-01"
+          },
+          {
+            "ITEM": "SAMPLE-01-01"
+          },
+          {
+            "ITEM": "SAMPLE-01-03"
+          }
+        ]
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -98.5795,
+            39.8283
+          ],
+          [
+            -98.5807,
+            39.8299
+          ],
+          [
+            -98.5785,
+            39.8269
+          ]
+        ]
+      }
+    }
+  ]
 }
