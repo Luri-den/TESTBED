@@ -103,7 +103,7 @@
     emptyTitle: "This map is ready to be set up", emptyText: "Open the editor to choose your area and add your first places.",
     since: "Since {y}", listen: "Listen", watch: "Watch", transcript: "Transcript", group: "Group",
     photoSpot: "Photo Spot", story: "Story", about: "About", usOnly: "Only available for places in the United States",
-    hours: "Hours", address: "Address"
+    hours: "Hours", address: "Address", home: "Back to Start View"
   };
   let SITE = {};
   const L = (k, vars) => {
@@ -355,23 +355,26 @@
     map.on("style.load", addOverlayLayers);
     map.on("error", e => { if (e && e.error && /tiles|style/i.test(String(e.error.message))) warn("Map background: " + e.error.message); });
     map.on("zoomend", refreshMarkerVisibility);
+    map.on("movestart", e => { if (e && e.originalEvent && GROUP_VIEW) GROUP_VIEW.moved = true; });   // the visitor moved it themselves
     map.on("click", e => {            // tapping empty map closes menus and the card
       if (!e.originalEvent || e.originalEvent.target !== map.getCanvas()) return;
       closeMenus();
       if (SHEET.state !== "closed") { closeSheet(); if (OPEN_GROUP) closeGroup(); }
     });
   }
-  function fitStart(hasDeepLink) {
-    if (!map || hasDeepLink) return;
-    const lat = parseFloat(SITE.CENTER_LAT);
+  // The start view: the saved center and zoom, or else everything on the map, or else the area outline.
+  function goHome(animate) {
+    if (!map) return;
+    const dur = animate && !REDUCED ? 700 : 0;
+    const lat = parseFloat(SITE.CENTER_LAT), lng = parseFloat(SITE.CENTER_LNG), z = parseFloat(SITE.ZOOM);
     const pts = DATA.items.filter(i => i.hasPos && !i.PART_OF).map(i => [i.lng, i.lat]);
-    if (yes(SITE.FIT_TO_MARKERS, true) && pts.length > 1) { map.fitBounds(boundsOf(pts), { padding: 70, maxZoom: 16, duration: 0 }); return; }
-    if (!isFinite(lat)) {
-      const rings = outlineRings();
-      if (rings.length) map.fitBounds(boundsOf(rings.flat()), { padding: 40, duration: 0 });
-      else if (pts.length === 1) map.jumpTo({ center: pts[0], zoom: 15 });
-    }
+    if (yes(SITE.FIT_TO_MARKERS, true) && pts.length > 1) { map.fitBounds(boundsOf(pts), { padding: 70, maxZoom: 16, duration: dur }); return; }
+    if (isFinite(lat) && isFinite(lng)) { map.easeTo({ center: [lng, lat], zoom: isFinite(z) ? z : 13, duration: dur }); return; }
+    const rings = outlineRings();
+    if (rings.length) map.fitBounds(boundsOf(rings.flat()), { padding: 40, duration: dur });
+    else if (pts.length === 1) map.easeTo({ center: pts[0], zoom: 15, duration: dur });
   }
+  function fitStart(hasDeepLink) { if (!hasDeepLink) goHome(false); }
 
   /* ---------- 5. Markers and groups ---------- */
   const SHAPES = {   // built-in marker outlines (corners as % of the marker box)
@@ -471,15 +474,21 @@
       openGroup(it);
     } else if (it.PART_OF) {
       OPEN_GROUP = DATA.byId.get(it.PART_OF); refreshMarkerVisibility();
-    } else if (OPEN_GROUP) closeGroup();
+    } else if (OPEN_GROUP) { GROUP_VIEW = null; closeGroup(); }
     openCard(it);
   }
+  let GROUP_VIEW = null;   // where the map was before a group zoomed in
   function openGroup(g) {
+    if (map && OPEN_GROUP !== g) { const c = map.getCenter(); GROUP_VIEW = { center: [c.lng, c.lat], zoom: map.getZoom(), moved: false }; }
     OPEN_GROUP = g; refreshMarkerVisibility();
     const pts = [g, ...g.members].filter(i => i.hasPos).map(i => [i.lng, i.lat]);
     if (map && pts.length > 1) map.fitBounds(boundsOf(pts), { padding: { top: 140, bottom: sheetPad(), left: 60, right: 60 }, maxZoom: 17, duration: REDUCED ? 0 : 700 });
   }
-  function closeGroup() { OPEN_GROUP = null; refreshMarkerVisibility(); }
+  function closeGroup() {
+    OPEN_GROUP = null; refreshMarkerVisibility();
+    if (map && GROUP_VIEW && !GROUP_VIEW.moved) map.easeTo({ center: GROUP_VIEW.center, zoom: GROUP_VIEW.zoom, duration: REDUCED ? 0 : 600 });
+    GROUP_VIEW = null;
+  }
 
   /* ---------- 6. The card ---------- */
   const SHEET = { item: null, state: "closed" };
@@ -674,7 +683,7 @@
   // Zones (top row, second row, left and right stacks, bottom row, More menu) are set in site.csv
   // with LAYOUT_TOP, LAYOUT_TOP2, LAYOUT_LEFT, LAYOUT_RIGHT, LAYOUT_BOTTOM and LAYOUT_MORE.
   const OLD_NAMES = { chips: "categories", event: "about", tour: "tours", newrow: "", spacer: "" };
-  const DEFAULT_LAYOUT = { TOP: "search,daynight", TOP2: "categories", LEFT: "", RIGHT: "mapstyle,more", BOTTOM: "", MORE: "share,about" };
+  const DEFAULT_LAYOUT = { TOP: "search,daynight", TOP2: "categories", LEFT: "", RIGHT: "mapstyle,home,more", BOTTOM: "", MORE: "share,about" };
   function zoneList(z) {
     let v = SITE["LAYOUT_" + z];
     if (z === "RIGHT" && !v && SITE.LAYOUT_FLOAT) v = SITE.LAYOUT_FLOAT;
@@ -708,6 +717,7 @@
   RENDER.mapstyle = () => roundBtn(L("mapStyle"), '<path d="M12 3l9 5-9 5-9-5z"></path><path d="M3 13l9 5 9-5"></path>', e => openMapStyleMenu(e.currentTarget));
   RENDER.aerial = () => roundBtn(L("aerial"), '<circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path>', () => { setBaseStyle(STYLE_MODE === "aerial" ? "standard" : "aerial"); store.set("mapstyle", STYLE_MODE); });
   RENDER.more = () => { const items = zoneList("MORE").filter(n => MENU_ITEMS[n] && MENU_ITEMS[n].show()); return items.length ? roundBtn(L("more"), '<circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle>', e => openMoreMenu(e.currentTarget, items)) : null; };
+  RENDER.home = () => roundBtn(L("home"), '<path d="M4 11l8-7 8 7"></path><path d="M6 10v10h12V10"></path>', () => { closeMenus(); if (SHEET.state !== "closed") closeSheet(); OPEN_GROUP = null; GROUP_VIEW = null; refreshMarkerVisibility(); goHome(true); });
   RENDER.share = () => roundBtn(L("shareMap"), ICON.share, () => shareLink(null));
   RENDER.about = () => (SITE.EVENT_TEXT || SITE.EVENT_TITLE) ? pillBtn(SITE.EVENT_BUTTON || L("about"), openAbout) : null;
   RENDER.categories = zone => {
@@ -735,6 +745,7 @@
     about: { show: () => !!(SITE.EVENT_TEXT || SITE.EVENT_TITLE), label: () => SITE.EVENT_BUTTON || L("about"), run: openAbout },
     categories: { show: () => DATA.cats.size > 1, label: () => L("categories"), run: () => openCategoryMenu($("zoneRight"), [...DATA.cats.values()]) },
     mapstyle: { show: () => true, label: () => L("mapStyle"), run: () => openMapStyleMenu($("zoneRight")) },
+    home: { show: () => true, label: () => L("home"), run: () => RENDER.home().click() },
     daynight: { show: () => true, label: () => NIGHT ? L("dayMode") : L("nightMode"), run: () => setNight(!NIGHT) }
   };
 

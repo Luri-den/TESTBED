@@ -57,7 +57,7 @@ ZOOM_POS,top
 PASSPORT_GRAND_RANK,
 TIME_ZONE,
 LAYOUT_TOP2,"categories,tours"
-LAYOUT_RIGHT,"near,mapstyle,more"
+LAYOUT_RIGHT,"near,mapstyle,home,more"
 LAYOUT_LEFT,
 CATEGORY_STYLE,chips
 BADGE,

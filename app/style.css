@@ -86,7 +86,8 @@ body:has(.sheet[data-state="peek"]) .zone-bottom, body:has(.sheet[data-state="op
 .pop .empty { padding: 14px; color: var(--muted); font-size: 14px; }
 
 /* ---------- markers ---------- */
-.mk { position: relative; width: 40px; height: 40px; padding: 0; border: 0; background: transparent; }
+/* No "position" here: the map library pins each marker with its own absolute positioning. */
+.mk { width: 40px; height: 40px; padding: 0; border: 0; background: transparent; }
 .mk-major { width: 48px; height: 48px; }
 .mk-member { width: 32px; height: 32px; }
 .mk-face { position: absolute; inset: 0; border-radius: 999px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px var(--marker-ring), 0 3px 10px rgba(0,0,0,.3); transition: transform .15s ease; }
@@ -139,9 +140,10 @@ body.reduced .sheet { transition: none; }
 .c-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; font-size: 14px; color: var(--muted); }
 .c-meta .sep { opacity: .6; }
 .c-aka { margin-top: 4px; font-size: 13px; color: var(--muted); }
-.c-acts { display: flex; gap: 10px; margin-top: 16px; }
+.c-acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 .act { flex: 0 0 auto; height: 48px; min-width: 48px; padding: 0 14px; border-radius: 14px; border: 0; background: var(--surface-2); color: var(--text); text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 600; }
-.act-main { flex: 1; background: var(--accent); color: var(--on-accent); font-size: 15px; white-space: nowrap; }
+.act-main { flex: 1; min-width: 0; background: var(--accent); color: var(--on-accent); font-size: 15px; white-space: nowrap; }
+.act span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .act .i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .c-acts .act:not(.act-main) span { display: none; }
 .c-info { margin-top: 16px; border-radius: 16px; background: var(--surface-3); padding: 2px 14px; }
@@ -184,6 +186,8 @@ body.reduced .sheet { transition: none; }
   .sheet[data-state="peek"] .scroll-track { display: block; }
   .scroll-track { top: 64px; }
   .c-acts .act:not(.act-main) span { display: inline; }
+  .c-acts .act-main { flex: 1 0 100%; }
+  .c-acts .act:not(.act-main) { flex: 1 1 0; min-width: 0; padding: 0 10px; }
 }
 
 /* ---------- inside another website (?embed=1) ---------- */
