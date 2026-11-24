@@ -1,0 +1,11 @@
+ID,KIND,PART_OF,NAME,OTHER_NAMES,ADDRESS,YEAR_START,YEAR_END,LAT,LONG,CATEGORY,MAJOR,TEXT,BLURB,SOURCE,CREDIT,SERIES,ORDER,CHECKIN,RADIUS,INSIDE,FLOOR,ICON,ICON_COLOR,EFFECT,WEBSITE,PHONE,HOURS,ORG,SHAPE,SHOW_MEMBERS,STAFF_NOTE
+SAMPLE-01,place,,Historic Downtown,,,,,39.828300,-98.579500,HIST,yes,A made-up group of places for testing. Tap it to see its members fan out.,,,,,,,,,,,,,,,,,,tap,
+SAMPLE-01-01,place,SAMPLE-01,Old Courthouse (Sample),County Building,100 Main St,1888,,39.829900,-98.580700,HIST,,"Sample text about a building.
+
+A second paragraph, to test spacing.",,Sample source line,,,,,,,,,,,,,,,,,
+SAMPLE-01-02,place,SAMPLE-01,Main Street Market (Sample),,,,,39.829200,-98.577900,FOOD,,,,,,,,,,,,,,,example.com,,Sat 8 AM – 1 PM,,,,
+SAMPLE-01-03,place,SAMPLE-01,Corner Bookshop (Sample),,,,,39.826900,-98.578500,SHOP,,,,,,,,,,,,,,,,555-0100,,,,,
+SAMPLE-02,place,,Riverside Park (Sample),,,,,39.832800,-98.575500,PARK,,A sample park with a leaf-shaped marker.,,,,,,,,,,,,,,,,,,,
+SAMPLE-03,place,,Sample Diner,,,1952,2019,39.824800,-98.583700,FOOD,,,,,,,,,,,,,,,https://example.com,555-0123,Daily 6 AM – 2 PM,,,,
+SAMPLE-04,photospot,,Mill Overlook (Sample),,,,,39.831300,-98.584000,,,A sample Photo Spot.,,,,,,,,,,,,ripple,,,,,,,
+SAMPLE-05,story,,The Great Flood (Sample Story),,,,,39.824300,-98.575700,,,A sample story marker with a bob effect.,,,,,,,,,,,,bob,,,,,,,

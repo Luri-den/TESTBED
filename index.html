@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Map</title>
+<meta name="theme-color" content="#0B7A75">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<link rel="stylesheet" href="app/style.css">
+</head>
+<body>
+<!--
+  ETS Community Map: the page visitors see.
+  Nothing about any one place lives in this file. Everything comes from the data/ folder.
+  Add ?embed=1 to the address to show it inside another website, ?debug=1 to see problems,
+  ?safe=1 to turn off animations and extras.
+-->
+<div id="map" aria-label="Map"></div>
+
+<div id="ui">
+  <div class="zone zone-top" id="zoneTop"></div>
+  <div class="zone zone-top2" id="zoneTop2"></div>
+  <div class="zone zone-left" id="zoneLeft"></div>
+  <div class="zone zone-right" id="zoneRight"></div>
+  <div class="zone zone-bottom" id="zoneBottom"></div>
+</div>
+
+<div id="searchResults" class="pop" role="listbox" hidden></div>
+<div id="menuPop" class="pop" hidden></div>
+
+<section id="sheet" class="sheet" aria-label="Details" data-state="closed">
+  <button id="sheetHandle" class="sheet-handle" aria-label="Open or close the card">
+    <svg viewBox="0 0 40 20" aria-hidden="true"><path d="M20 2 L38 18 H2 Z"></path></svg>
+  </button>
+  <button id="sheetClose" class="sheet-close" aria-label="Close">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+  </button>
+  <div id="sheetBody" class="sheet-body"></div>
+  <div id="scrollTrack" class="scroll-track" aria-hidden="true"><div id="scrollThumb" class="scroll-thumb"></div></div>
+</section>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<div id="debug" class="debug" hidden></div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="app/core.js"></script>
+</body>
+</html>

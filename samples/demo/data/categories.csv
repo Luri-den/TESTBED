@@ -1,0 +1,5 @@
+CODE,LABEL,COLOR,ICON,SHAPE,FILL,FILL_COLOR,FILL_COLOR2,RANKED
+HIST,History,#1D4ED8,courthouse,circle,,,,yes
+FOOD,Food,#C2410C,store,circle,,,,
+SHOP,Shops,#7C3AED,store,square,,,,
+PARK,Parks,#15803D,bridge,leaf,,,,

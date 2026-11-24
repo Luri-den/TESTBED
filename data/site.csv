@@ -23,15 +23,15 @@ MAPS_LINK,yes
 LAYOUT_STYLE,
 EVENT_BUTTON,About
 EVENT_TITLE,About This Map
-EVENT_TEXT,"Tap a place. A card slides up from the bottom. Drag the little bar at the top of the card up for a bigger view, or down to dismiss.
+EVENT_TEXT,"Tap a place. Its card slides up from the bottom. Tap or drag the triangle up for more, or down to close it.
 
-Filter by category. Use the pills at the top. Tap to hide or show a category; tap ""Reset"" to bring them all back.
+Filter by category. Tap a category at the top to hide or show it; tap All to bring them all back.
 
-Compare old and new. When an old map is on, drag the ⇆ handle left and right to wipe between then and now.
+Day or night. The moon and sun button switches between Day and Night Modes. The map remembers your choice.
 
-Share a place. Open a place and tap ""Share this place"" — the link will take your friend straight there.
+Change the map. The layers button switches between the standard map, a topographic map and aerial photos.
 
-Save for offline use. Open your passport (🏆 in the top-right) and tap ""Save this map for offline use."" After it finishes, the map, photos, and stories work without a signal. Great for walking tours."
+Share a place. Open a place and tap Share. The link takes your friend straight to it."
 WELCOME_THEME,
 WELCOME_TEXT,Welcome to|{PLACE}
 BAR_STYLE,
@@ -48,11 +48,25 @@ INTRO_FEATURES,mixed
 INTRO_CARD,
 FONT_BODY,
 FONT_HEAD,
-LAYOUT_TOP,"search,event,more,spacer,passport"
-LAYOUT_MORE,"aerial,oldmaps,year,chips"
-LAYOUT_OFF,"tour,newrow"
-LAYOUT_BOTTOM,"near,tours,stories"
-LAYOUT_FLOAT,legend
+LAYOUT_TOP,"search,daynight"
+LAYOUT_MORE,"share,about"
+LAYOUT_OFF,
+LAYOUT_BOTTOM,
+LAYOUT_FLOAT,
 ZOOM_POS,top
 PASSPORT_GRAND_RANK,
 TIME_ZONE,
+LAYOUT_TOP2,"categories,tours"
+LAYOUT_RIGHT,"near,mapstyle,more"
+LAYOUT_LEFT,
+CATEGORY_STYLE,chips
+BADGE,
+BADGE_STYLE,filled
+BADGE_TEXT,
+BADGE_ICON,
+BADGE_LOGO,
+GROUP_SHAPE,
+SHOW_MEMBERS,tap
+LOCAL_IMAGERY_URL,
+LOCAL_IMAGERY_CREDIT,
+LOCAL_IMAGERY_MINZOOM,

@@ -1,0 +1,56 @@
+{
+  "outline": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "stroke": "#0B7A75",
+          "stroke-width": 4,
+          "stroke-dasharray": "dotted"
+        },
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                -98.5885,
+                39.8353
+              ],
+              [
+                -98.57549999999999,
+                39.8353
+              ],
+              [
+                -98.57549999999999,
+                39.8323
+              ],
+              [
+                -98.5705,
+                39.8323
+              ],
+              [
+                -98.5705,
+                39.8213
+              ],
+              [
+                -98.5855,
+                39.8213
+              ],
+              [
+                -98.5885,
+                39.8253
+              ],
+              [
+                -98.5885,
+                39.8353
+              ]
+            ]
+          ]
+        }
+      }
+    ]
+  },
+  "overlays": [],
+  "backdrop": null
+}
