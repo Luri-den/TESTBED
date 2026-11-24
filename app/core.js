@@ -103,7 +103,7 @@
     emptyTitle: "This map is ready to be set up", emptyText: "Open the editor to choose your area and add your first places.",
     since: "Since {y}", listen: "Listen", watch: "Watch", transcript: "Transcript", group: "Group",
     photoSpot: "Photo Spot", story: "Story", about: "About", usOnly: "Only available for places in the United States",
-    hours: "Hours", address: "Address", home: "Back to Start View", exitEvent: "Back to Main Map"
+    hours: "Hours", address: "Address", home: "Back to Start View", exitEvent: "Back to Main Map", exitShort: "Exit", eventMap: "Event Map"
   };
   let SITE = {};
   const L = (k, vars) => {
@@ -754,10 +754,12 @@
     });
     return row;
   };
-  RENDER.eventbanner = () => {
-    const b = document.createElement("a"); b.className = "pill pill-accent";
-    const u = new URL(location.href); u.searchParams.delete("event"); u.searchParams.delete("place"); b.href = u.toString();
-    b.innerHTML = esc(EVENT.title) + ' <span style="opacity:.85">· ' + esc(L("exitEvent")) + "</span>"; return b;
+  RENDER.eventbanner = () => {        // which event map this is, with an obvious way back to the main map
+    const wrap = document.createElement("div"); wrap.className = "ev-banner";
+    const u = new URL(location.href); u.searchParams.delete("event"); u.searchParams.delete("place"); u.searchParams.delete("happening");
+    wrap.innerHTML = '<span class="ev-label">' + esc(L("eventMap")) + '</span><span class="ev-title">' + esc(EVENT.title) + "</span>" +
+      '<a class="ev-close" href="' + esc(u.toString()) + '" aria-label="' + esc(L("exitEvent")) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg><span>' + esc(L("exitShort")) + "</span></a>";
+    return wrap;
   };
   RENDER.openfull = () => { const a = document.createElement("a"); a.className = "pill pill-accent"; const u = new URL(location.href); u.searchParams.delete("embed"); a.href = u.toString(); a.target = "_blank"; a.rel = "noopener"; a.innerHTML = esc(L("openFull")) + svgI("maps"); return a; };
 

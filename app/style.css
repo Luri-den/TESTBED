@@ -241,3 +241,10 @@ body.embed { --sheet-top: 64px; --sheet-peek: 260px; }
 .cal-day.today { font-weight: 800; box-shadow: inset 0 0 0 2px var(--accent); }
 .cal-day.on { background: var(--accent); color: var(--on-accent); }
 .cal-day.on::after { background: var(--on-accent); }
+
+/* the event banner: which event map this is, and the way out */
+.ev-banner { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 4px 0 14px; border-radius: 999px; background: var(--accent); color: var(--on-accent); box-shadow: 0 2px 8px rgba(20,24,27,.18); }
+.ev-label { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; opacity: .85; }
+.ev-title { font-size: 14px; font-weight: 700; max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-close { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px 0 9px; border-radius: 999px; background: var(--surface); color: var(--text); text-decoration: none; font-size: 13px; font-weight: 700; }
+.ev-close svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; }
