@@ -1,0 +1,58 @@
+KEY,VALUE
+PLACE,
+HEADER,Explore {PLACE}
+TAB_TITLE,Explore {PLACE}
+BAR_COLOR,#0B7A75
+CENTER_LAT,
+CENTER_LNG,
+ZOOM,
+BOUNDS_WEST,
+BOUNDS_SOUTH,
+BOUNDS_EAST,
+BOUNDS_NORTH,
+MIN_ZOOM,
+MAX_ZOOM,
+FIT_TO_MARKERS,yes
+PASSPORT,no
+PASSPORT_RANKS,yes
+PRIZES,yes
+YEAR_SLIDER,no
+OVERLAY_SLIDER,no
+AERIAL_BUTTON,yes
+MAPS_LINK,yes
+LAYOUT_STYLE,
+EVENT_BUTTON,About
+EVENT_TITLE,About This Map
+EVENT_TEXT,"Tap a place. A card slides up from the bottom. Drag the little bar at the top of the card up for a bigger view, or down to dismiss.
+
+Filter by category. Use the pills at the top. Tap to hide or show a category; tap ""Reset"" to bring them all back.
+
+Compare old and new. When an old map is on, drag the ⇆ handle left and right to wipe between then and now.
+
+Share a place. Open a place and tap ""Share this place"" — the link will take your friend straight there.
+
+Save for offline use. Open your passport (🏆 in the top-right) and tap ""Save this map for offline use."" After it finishes, the map, photos, and stories work without a signal. Great for walking tours."
+WELCOME_THEME,
+WELCOME_TEXT,Welcome to|{PLACE}
+BAR_STYLE,
+SEARCH_WIDTH,50
+SEARCH_WIDTH_PHONE,50
+BOTTOM_ON,
+MAP_TONE,standard
+PASSPORT_STYLE,ring
+RING_COLOR,#F59E0B
+RING_TRACK,#C0C0C0
+RING_TEXT,#0B7A75
+INTRO_STYLE,spin
+INTRO_FEATURES,mixed
+INTRO_CARD,
+FONT_BODY,
+FONT_HEAD,
+LAYOUT_TOP,"search,event,more,spacer,passport"
+LAYOUT_MORE,"aerial,oldmaps,year,chips"
+LAYOUT_OFF,"tour,newrow"
+LAYOUT_BOTTOM,"near,tours,stories"
+LAYOUT_FLOAT,legend
+ZOOM_POS,top
+PASSPORT_GRAND_RANK,
+TIME_ZONE,
