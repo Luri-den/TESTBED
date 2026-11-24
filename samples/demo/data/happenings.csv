@@ -1,1 +1,6 @@
 ID,NAME,TAG,COLOR,TEXT,FEATURES,TOUR_ID,LINK,LINK_TEXT,ENABLED,REPEAT,START,END,START_DAY,END_DAY,DAYS,START_TIME,END_TIME,SOON_DAYS,FOLDER,KIND,PUBLIC
+MARKET,Saturday Market (Sample),Saturday Market,#C2410C,A made-up weekly market.,SAMPLE-01-02,,,,,weekly,,,,,6,08:00,13:00,,,,
+LIGHTS,Downtown Lights Walk (Sample),Lights Walk,#F59E0B,A made-up season of holiday lights downtown.,SAMPLE-01|SAMPLE-01-01|SAMPLE-01-03,,example.com,Event Website,,yearly,2000-11-20T17:00,2000-01-05T21:00,,,,,,,lights,,
+CLEANUP,Park Cleanup (Sample),,#15803D,First of every month.,SAMPLE-02,,,,,monthly,,,1,1,,09:00,12:00,,,,
+EXHIBIT,Flood Exhibit (Sample),,#1D4ED8,Always open.,SAMPLE-05,,,,,ongoing,,,,,,,,,,,
+FOUNDERS,Founders Day (Sample),,#7C3AED,,SAMPLE-01-01,,,,,once,2026-12-05T10:00,2026-12-05T16:00,,,,,,21,,,

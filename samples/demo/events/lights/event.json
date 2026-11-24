@@ -1,0 +1,8 @@
+{
+  "title": "Downtown Lights Walk",
+  "kind": "event",
+  "public": true,
+  "overrides": [
+    "site.csv"
+  ]
+}

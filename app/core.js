@@ -65,13 +65,13 @@
   const BASE = SAMPLE ? "samples/" + SAMPLE + "/" : "";
   let EVENT = null; // { name, overrides: [] }
   function dataUrl(file) {
-    if (EVENT && EVENT.overrides.includes(file)) return "events/" + EVENT.name + "/data/" + file;
+    if (EVENT && EVENT.overrides.includes(file)) return BASE + "events/" + EVENT.name + "/data/" + file;
     return BASE + "data/" + file;
   }
   function mediaUrl(file) {
     if (!file) return "";
     if (/^(https?:)?\/\//i.test(file) || file.startsWith("data:")) return file;
-    if (EVENT && EVENT.media && EVENT.media.has(file)) return "events/" + EVENT.name + "/media/" + file;
+    if (EVENT && EVENT.media && EVENT.media.has(file)) return BASE + "events/" + EVENT.name + "/media/" + file;
     return BASE + "media/" + file;
   }
   async function getText(url) {
@@ -103,7 +103,7 @@
     emptyTitle: "This map is ready to be set up", emptyText: "Open the editor to choose your area and add your first places.",
     since: "Since {y}", listen: "Listen", watch: "Watch", transcript: "Transcript", group: "Group",
     photoSpot: "Photo Spot", story: "Story", about: "About", usOnly: "Only available for places in the United States",
-    hours: "Hours", address: "Address", home: "Back to Start View"
+    hours: "Hours", address: "Address", home: "Back to Start View", exitEvent: "Back to Main Map"
   };
   let SITE = {};
   const L = (k, vars) => {
@@ -113,12 +113,12 @@
   };
 
   /* ---------- 2. Loading the site's data ---------- */
-  const DATA = { items: [], byId: new Map(), cats: new Map(), media: new Map(), map: null, icons: { icons: {}, shapes: {} } };
+  const DATA = { items: [], byId: new Map(), cats: new Map(), media: new Map(), map: null, icons: { icons: {}, shapes: {} }, happenings: [] };
 
   async function loadAll() {
     const ev = (Q.get("event") || "").replace(/[^a-z0-9_-]/gi, "");
     if (ev) {
-      const ej = await getJSON("event.json", "events/" + ev + "/");
+      const ej = await getJSON("event.json", BASE + "events/" + ev + "/");
       if (ej) EVENT = { name: ev, overrides: ej.overrides || [], title: ej.title || ev, media: new Set() };
       else warn("The event \"" + ev + "\" wasn't found, so the main map is shown.");
     }
@@ -130,9 +130,10 @@
       const merged = {}; main.forEach(r => { if (r.KEY) merged[r.KEY.trim()] = r.VALUE || ""; });
       SITE = Object.assign(merged, SITE);
     }
-    const [items, cats, media, map, icons] = await Promise.all([
-      getCSV("items.csv"), getCSV("categories.csv"), getCSV("media.csv"), getJSON("map.json"), getJSON("icons.json")
+    const [items, cats, media, map, icons, haps] = await Promise.all([
+      getCSV("items.csv"), getCSV("categories.csv"), getCSV("media.csv"), getJSON("map.json"), getJSON("icons.json"), getCSV("happenings.csv")
     ]);
+    DATA.happenings = haps;
     if (EVENT) media.forEach(m => m.FILE && EVENT.media.add(m.FILE));
     DATA.map = map || { outline: null, overlays: [], backdrop: null };
     DATA.icons = icons || { icons: {}, shapes: {} };
@@ -467,6 +468,13 @@
   }
   function updateGroupLines() { const s = map && map.getSource && map.getSource("ets-group-lines"); if (s) s.setData(groupLinesData()); }
 
+  // Highlight some places (a happening's venues) and dim the rest; null clears it.
+  let HL = null;
+  function highlight(ids) {
+    HL = ids && ids.length ? new Set(ids) : null;
+    MARKERS.forEach(({ el }, id) => { el.classList.toggle("mk-hl", !!HL && HL.has(id)); el.classList.toggle("mk-dim", !!HL && !HL.has(id)); });
+  }
+
   function onMarkerTap(it) {
     closeMenus();
     if (it.members.length) {
@@ -621,6 +629,7 @@
   }
 
   function openCard(it) {
+    if (HL && !HL.has(it.ID)) highlight(null);
     SHEET.item = it;
     const body = $("sheetBody");
     body.innerHTML = cardHtml(it);
@@ -629,7 +638,14 @@
     setSheet(desktop() ? "open" : "peek");
     setUrl({ place: it.ID });
   }
-  function closeSheet() { SHEET.item = null; setSheet("closed"); setUrl({ place: null }); }
+  function closeSheet() { SHEET.item = null; setSheet("closed"); setUrl({ place: null }); highlight(null); if (SHEET.onClose) { const f = SHEET.onClose; SHEET.onClose = null; f(); } }
+  // Show any content in the card (used by feature files such as Happenings)
+  function openSheetHtml(html, wire, state) {
+    SHEET.item = null; SHEET.onClose = null;
+    const body = $("sheetBody"); body.innerHTML = html; body.scrollTop = 0;
+    if (wire) wire(body);
+    setSheet(state || "open");
+  }
   function setSheet(state) {
     SHEET.state = state;
     const s = $("sheet"); s.dataset.state = state;
@@ -682,8 +698,8 @@
   /* ---------- 7. Controls ---------- */
   // Zones (top row, second row, left and right stacks, bottom row, More menu) are set in site.csv
   // with LAYOUT_TOP, LAYOUT_TOP2, LAYOUT_LEFT, LAYOUT_RIGHT, LAYOUT_BOTTOM and LAYOUT_MORE.
-  const OLD_NAMES = { chips: "categories", event: "about", tour: "tours", newrow: "", spacer: "" };
-  const DEFAULT_LAYOUT = { TOP: "search,daynight", TOP2: "categories", LEFT: "", RIGHT: "mapstyle,home,more", BOTTOM: "", MORE: "share,about" };
+  const OLD_NAMES = { chips: "categories", event: "about", tour: "tours", newrow: "" };
+  const DEFAULT_LAYOUT = { TOP: "search,daynight", TOP2: "categories", TOP3: "happenings,spacer,tours", LEFT: "", RIGHT: "mapstyle,home,more", BOTTOM: "", MORE: "share,about" };
   function zoneList(z) {
     let v = SITE["LAYOUT_" + z];
     if (z === "RIGHT" && !v && SITE.LAYOUT_FLOAT) v = SITE.LAYOUT_FLOAT;
@@ -738,6 +754,11 @@
     });
     return row;
   };
+  RENDER.eventbanner = () => {
+    const b = document.createElement("a"); b.className = "pill pill-accent";
+    const u = new URL(location.href); u.searchParams.delete("event"); u.searchParams.delete("place"); b.href = u.toString();
+    b.innerHTML = esc(EVENT.title) + ' <span style="opacity:.85">· ' + esc(L("exitEvent")) + "</span>"; return b;
+  };
   RENDER.openfull = () => { const a = document.createElement("a"); a.className = "pill pill-accent"; const u = new URL(location.href); u.searchParams.delete("embed"); a.href = u.toString(); a.target = "_blank"; a.rel = "noopener"; a.innerHTML = esc(L("openFull")) + svgI("maps"); return a; };
 
   const MENU_ITEMS = {
@@ -758,17 +779,20 @@
   function pillBtn(label, onClick) { const b = document.createElement("button"); b.type = "button"; b.className = "pill"; b.textContent = label; b.addEventListener("click", onClick); return b; }
 
   function renderControls() {
-    const zones = { TOP: "zoneTop", TOP2: "zoneTop2", LEFT: "zoneLeft", RIGHT: "zoneRight", BOTTOM: "zoneBottom" };
+    const zones = { TOP: "zoneTop", TOP2: "zoneTop2", TOP3: "zoneTop3", LEFT: "zoneLeft", RIGHT: "zoneRight", BOTTOM: "zoneBottom" };
     const placed = new Set();
     Object.keys(zones).forEach(z => {
       const box = $(zones[z]); box.innerHTML = "";
       const names = zoneList(z);
       if (EMBED && z === "TOP2") names.push("openfull");
+      if (EVENT && z === "TOP3" && RENDER.eventbanner) names.unshift("eventbanner");
       names.forEach(n => {
+        if (n === "spacer") { if (box.children.length) { const sp = document.createElement("span"); sp.className = "spacer"; box.appendChild(sp); } return; }
         if (placed.has(n) || !RENDER[n]) return;
         const el = RENDER[n](z); if (!el) return;
         placed.add(n); box.appendChild(el);
       });
+      while (box.lastElementChild && box.lastElementChild.classList.contains("spacer")) box.lastElementChild.remove();
       box.hidden = !box.children.length;
     });
     if (!placed.has("search")) $("zoneTop").prepend(RENDER.search("TOP"));   // the badge and search are always reachable
@@ -885,12 +909,37 @@
     d.innerHTML = "<b>Problems found (" + problems.length + ")</b><ol>" + problems.map(p => "<li>" + esc(p) + "</li>").join("") + "</ol>";
   }
 
+  /* ---------- Feature files ----------
+     Extras (Happenings now; Tours, Passport and others later) live in their own files in app/ and only
+     load when the site has something for them. They use this small set of tools from the core. */
+  const API = {
+    get SITE() { return SITE; }, DATA, RENDER, MENU_ITEMS, Q, REDUCED, get EVENT() { return EVENT; }, BASE,
+    L, words: w => Object.keys(w).forEach(k => { if (!(k in WORDS)) WORDS[k] = w[k]; }),
+    esc, yes, store, mediaUrl, svgI, colorFor, toast, warn, setUrl, goTo, highlight, renderControls,
+    openSheetHtml, closeSheet, setSheet, get sheetState() { return SHEET.state; }, set onSheetClose(f) { SHEET.onClose = f; },
+    fitTo(ids) { const pts = ids.map(id => DATA.byId.get(id)).filter(i => i && i.hasPos).map(i => [i.lng, i.lat]);
+      if (!map || !pts.length) return;
+      if (pts.length === 1) map.easeTo({ center: pts[0], zoom: Math.max(map.getZoom(), 15), padding: { bottom: sheetPad(), top: 120, left: desktop() ? 420 : 0, right: 0 }, duration: REDUCED ? 0 : 600 });
+      else map.fitBounds(boundsOf(pts), { padding: { top: 150, bottom: sheetPad(), left: desktop() ? 460 : 60, right: 60 }, maxZoom: 16, duration: REDUCED ? 0 : 600 }); }
+  };
+  const STARTERS = [];
+  API.onStart = f => STARTERS.push(f);     // runs once the map is ready
+  window.ETSCore = API;
+  function loadFeature(name) {
+    return new Promise(res => {
+      const sc = document.createElement("script"); sc.src = "app/" + name + ".js";
+      sc.onload = res; sc.onerror = () => { warn("app/" + name + ".js couldn't load, so that part is skipped."); res(); };
+      document.head.appendChild(sc);
+    });
+  }
+
   /* ---------- 8. Start-up ---------- */
   async function start() {
     initTheme();
     await loadAll();
     applyLook();
     makeMap();
+    if (DATA.happenings.length) await loadFeature("happenings");
     renderControls();
     wireSheet();
     buildMarkers();
@@ -903,7 +952,12 @@
     if (cat && DATA.cats.has(cat)) { HIDDEN = new Set([...DATA.cats.keys()].filter(c => c !== cat)); refreshMarkerVisibility(); renderControls(); }
     const target = want && DATA.byId.get(want);
     if (want && !target) warn("The link asked for " + want + ", which isn't on this map.");
-    const go = () => { fitStart(!!target); if (target) goTo(target); else if (!DATA.items.length) openAbout(); };
+    const go = () => {
+      const deep = !!target || !!Q.get("happening");
+      fitStart(deep);
+      if (target) goTo(target); else if (!DATA.items.length && !DATA.happenings.length) openAbout();
+      STARTERS.forEach(f => { try { f(); } catch (e) { warn(e.message); } });
+    };
     if (map) map.once("load", () => {
       if (STYLE_MODE !== "standard" && !IN_US() && !(STYLE_MODE === "aerial" && SITE.LOCAL_IMAGERY_URL)) setBaseStyle("standard");
       go();
