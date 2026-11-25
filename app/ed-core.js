@@ -13,6 +13,10 @@
 
   /* ---------- 1. Helpers ---------- */
   const Q = new URLSearchParams(location.search);
+  // storage is labeled with this map's folder: every map on one GitHub account shares the browser's storage
+  const SCOPE = location.pathname.replace(/[^/]*$/, "");
+  const KEY = k => "ets:" + SCOPE + ":" + k;
+  ED.key = KEY;
   const $ = id => document.getElementById(id);
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const yes = (v, d) => (v == null || v === "") ? !!d : /^(yes|y|true|1|on)$/i.test(String(v).trim());
@@ -73,10 +77,12 @@
   async function fetchText(url) {
     try { const r = await fetch(url, { cache: "no-cache" }); return r.ok ? await r.text() : null; } catch (e) { return null; }
   }
-  const draftKey = path => "ets_draft:" + path;
+  const draftKey = path => KEY("draft:" + path);
   const getDraft = path => { try { return localStorage.getItem(draftKey(path)); } catch (e) { return null; } };
   const setDraft = (path, text) => { try { if (text == null) localStorage.removeItem(draftKey(path)); else localStorage.setItem(draftKey(path), text); } catch (e) { ED.toast("This browser is full, so changes can't be kept here. Publish soon."); } };
   ED.setDraft = setDraft; ED.getDraft = getDraft;
+  const getJust = path => { try { return JSON.parse(localStorage.getItem(KEY("published:" + path)) || "null"); } catch (e) { return null; } };
+  const setJust = (path, text) => { try { if (text == null) localStorage.removeItem(KEY("published:" + path)); else localStorage.setItem(KEY("published:" + path), JSON.stringify({ text, t: Date.now() })); } catch (e) { /* fine */ } };
 
   function load1(name, text) {
     const kind = name.endsWith(".csv") ? "csv" : "json";
@@ -102,12 +108,17 @@
     }
     await Promise.all(FILES.map(async name => {
       const path = pathFor(name);
-      const published = await fetchText(path);
+      let published = await fetchText(path);
+      // GitHub Pages can keep serving the old copy for about 10 minutes after a publish. Until it catches up,
+      // the editor uses what it just published, so recent edits never look lost.
+      const jp = getJust(path);
+      if (jp) { if (published === jp.text || Date.now() - jp.t > 20 * 60000) setJust(path, null); else { published = jp.text; ED.catchingUp = true; } }
       let text = published;
       // an event's site.csv only lists what changes, so the main one is read underneath it
       const draft = getDraft(path);
       const f = load1(name, draft != null ? draft : text);
       f.orig = published == null ? null : serialize(load1(name, published));
+      f.raw = published;            // exactly what the website has, to spot someone else's changes before publishing
       f.text = serialize(f);
       if (EVENT && name === "site.csv") {
         const main = load1(name, await fetchText(BASE + "data/site.csv"));
@@ -196,7 +207,7 @@
   ED.PENDING = PENDING;
   const idb = (() => {
     let dbp = null;
-    const open = () => dbp || (dbp = new Promise((res, rej) => { const r = indexedDB.open("ets-editor", 1); r.onupgradeneeded = () => r.result.createObjectStore("files"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }));
+    const open = () => dbp || (dbp = new Promise((res, rej) => { const r = indexedDB.open("ets-editor:" + SCOPE, 1); r.onupgradeneeded = () => r.result.createObjectStore("files"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }));
     const tx = (mode, fn) => open().then(db => new Promise((res, rej) => { const t = db.transaction("files", mode); const s = t.objectStore("files"); const out = fn(s); t.oncomplete = () => res(out && out.result); t.onerror = () => rej(t.error); }));
     return { put: (k, v) => tx("readwrite", s => s.put(v, k)).catch(() => {}), del: k => tx("readwrite", s => s.delete(k)).catch(() => {}), all: () => open().then(db => new Promise(res => { const out = []; const t = db.transaction("files"); const c = t.objectStore("files").openCursor(); c.onsuccess = () => { const cur = c.result; if (cur) { out.push([cur.key, cur.value]); cur.continue(); } else res(out); }; c.onerror = () => res([]); })).catch(() => []) };
   })();
@@ -548,7 +559,7 @@
   };
 
   /* ---------- 7. Publish, ZIP and Restore ---------- */
-  const GH = { get: () => { try { return JSON.parse(localStorage.getItem("ets_gh") || "{}"); } catch (e) { return {}; } }, set: v => { try { localStorage.setItem("ets_gh", JSON.stringify(v)); } catch (e) { /* fine */ } } };
+  const GH = { get: () => { try { return JSON.parse(localStorage.getItem(KEY("gh")) || "{}"); } catch (e) { return {}; } }, set: v => { try { localStorage.setItem(KEY("gh"), JSON.stringify(v)); } catch (e) { /* fine */ } } };
   function summary() {
     const lines = [];
     changedFiles().forEach(c => {
@@ -578,7 +589,7 @@
     const errors = problems.filter(p => p.level === "error"), warns = problems.filter(p => p.level === "warn");
     const lines = summary();
     const gh = GH.get();
-    const target = localStorage.getItem("ets_target") || "github";
+    const target = localStorage.getItem(KEY("target")) || "github";
     const html = "<h2>Publish</h2>" +
       (errors.length ? '<div class="ed-alert bad"><b>' + errors.length + " problem" + (errors.length > 1 ? "s" : "") + " must be fixed first.</b> These would break the map.</div>" + probList(errors) : '<div class="ed-alert good"><b>The data check passed.</b></div>') +
       (problems.length ? '<div class="ed-btnrow"><button type="button" class="ed-btn ed-small" data-copy="1">Copy Report</button></div>' : "") +
@@ -603,7 +614,7 @@
       m.querySelectorAll("[data-goto]").forEach(b => b.addEventListener("click", () => { closeM(); const it = ED.data.byId.get(b.dataset.goto); if (it) ED.select(it); }));
       const seg = () => m.querySelector('.ed-seg [aria-pressed="true"]').dataset.t;
       const syncT = () => { m.querySelectorAll(".ed-target").forEach(t => { t.hidden = t.dataset.for !== seg(); }); m.querySelector("[data-go]").disabled = !!errors.length || (!lines.length && seg() === "github" ); };
-      m.querySelectorAll(".ed-seg button").forEach(b => b.addEventListener("click", () => { m.querySelectorAll(".ed-seg button").forEach(x => x.removeAttribute("aria-pressed")); b.setAttribute("aria-pressed", "true"); localStorage.setItem("ets_target", b.dataset.t); syncT(); }));
+      m.querySelectorAll(".ed-seg button").forEach(b => b.addEventListener("click", () => { m.querySelectorAll(".ed-seg button").forEach(x => x.removeAttribute("aria-pressed")); b.setAttribute("aria-pressed", "true"); localStorage.setItem(KEY("target"), b.dataset.t); syncT(); }));
       syncT();
       const read = () => { const v = {}; ["owner", "repo", "branch", "folder", "token"].forEach(k => { v[k] = m.querySelector('[name="' + k + '"]').value.trim(); }); v.folder = v.folder.replace(/^\/+|\/+$/g, ""); GH.set(v); return v; };
       const prog = m.querySelector(".ed-prog"), bar = prog.querySelector("span"), msg = prog.querySelector("small");
@@ -611,20 +622,26 @@
       m.querySelector("[data-test]").addEventListener("click", async () => { const v = read(); try { await gh(v, "GET", ""); say("Connected to " + v.owner + "/" + v.repo + ".", 100); } catch (e) { say(e.message, 0); } });
       m.querySelector("[data-restore]").addEventListener("click", () => { const v = read(); closeM(); openRestore(v); });
       m.querySelector("[data-discard]").addEventListener("click", () => { closeM(); ED.confirm("Discard All Changes?", "Every change since the last publish will be thrown away, including uploaded photos that weren't published.", "Discard Them", ED.discardAll); });
+      let force = false;
       m.querySelector("[data-go]").addEventListener("click", async e => {
         e.target.disabled = true;
         try {
           if (seg() === "zip") { await publishZip(m.querySelector('[name="whole"]').checked, say); }
-          else { const v = read(); if (!v.owner || !v.repo || !v.token) throw new Error("Fill in Owner, Repository and Access Token first."); await publishGitHub(v, say); }
-          finishPublish();
+          else { const v = read(); if (!v.owner || !v.repo || !v.token) throw new Error("Fill in Owner, Repository and Access Token first."); await publishGitHub(v, say, force); }
+          finishPublish(seg() !== "zip");
           say(seg() === "zip" ? "The ZIP is downloading. Upload its files to your host to finish." : "Published. The website updates in about a minute.", 100);
-        } catch (err) { say("Publish didn't finish: " + err.message, 0); e.target.disabled = false; }
+        } catch (err) {
+          if (err.conflicts) { force = true; say("Someone else changed " + err.conflicts.join(", ") + " on GitHub since this editor opened. Publishing now would replace their changes. Reload the editor to get them first, or press Publish Anyway.", 0); e.target.textContent = "Publish Anyway"; }
+          else say("Publish didn't finish: " + err.message, 0);
+          e.target.disabled = false;
+        }
       });
     }, { wide: true });
   };
   function probList(list) { return '<ul class="ed-probs">' + list.map(p => "<li><b>" + esc(p.where) + "</b> " + esc(p.msg) + (p.go ? ' <button type="button" class="ed-btn ed-small" data-goto="' + esc(p.go) + '">Show Me</button>' : "") + "</li>").join("") + "</ul>"; }
-  function finishPublish() {            // what was published is now the new starting point
-    FILES.forEach(n => { const f = F[n]; f.orig = f.text; setDraft(f.path, null); });
+  function finishPublish(toGitHub) {            // what was published is now the new starting point
+    if (toGitHub) changedFiles().forEach(c => setJust(c.path, c.text));
+    FILES.forEach(n => { const f = F[n]; f.orig = f.text; if (toGitHub) f.raw = f.text; setDraft(f.path, null); });
     if (EVENT) { ED.eventOrig = JSON.stringify(eventInfo, null, 2) + "\n"; setDraft(eventDir() + "event.json", null); }
     EXTRA_FILES.forEach((t, p) => setDraft(p, null)); EXTRA_FILES.clear();
     PENDING.forEach((b, p) => idb.del(p)); PENDING.clear();
@@ -645,11 +662,24 @@
     return r.status === 204 ? null : r.json();
   }
   const b64 = async blob => { const buf = new Uint8Array(await blob.arrayBuffer()); let s = ""; for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000)); return btoa(s); };
-  async function publishGitHub(v, say) {
+  async function gitSha(text) {      // the fingerprint GitHub gives a file's contents
+    const body = new TextEncoder().encode(text), head = new TextEncoder().encode("blob " + body.length + "\0"), all = new Uint8Array(head.length + body.length);
+    all.set(head); all.set(body, head.length);
+    return [...new Uint8Array(await crypto.subtle.digest("SHA-1", all))].map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+  async function publishGitHub(v, say, force) {
     const pre = v.folder ? v.folder + "/" : "";
     const files = changedFiles(), media = [...PENDING.entries()];
     if (!files.length && !media.length) throw new Error("Nothing has changed.");
     say("Connecting to GitHub…", 5);
+    if (!force) {                     // has anyone else changed these files since this editor opened?
+      const conflicts = [];
+      for (const fl of files) {
+        const f = F[fl.name]; if (!f || f.path !== fl.path || f.raw == null) continue;
+        try { const cur = await gh(v, "GET", "/contents/" + (pre + fl.path).split("/").map(encodeURIComponent).join("/") + "?ref=" + encodeURIComponent(v.branch || "main")); if (cur && cur.sha && cur.sha !== await gitSha(f.raw)) conflicts.push(fl.path); } catch (e) { /* a new file, or not readable: nothing to compare */ }
+      }
+      if (conflicts.length) { const er = new Error("conflict"); er.conflicts = conflicts; throw er; }
+    }
     const ref = await gh(v, "GET", "/git/ref/heads/" + encodeURIComponent(v.branch || "main"));
     const head = ref.object.sha;
     const commit = await gh(v, "GET", "/git/commits/" + head);
@@ -667,7 +697,7 @@
       try {
         const list = await gh(v, "GET", "/commits?sha=" + encodeURIComponent(v.branch || "main") + "&per_page=8");
         m.innerHTML = '<button type="button" class="ed-x" aria-label="Close">✕</button><h2>Restore</h2><p class="ed-note">Each publish is one step. Undoing a step puts every file back the way it was before it, as a new publish (so it can be undone too).</p><ul class="ed-changes">' +
-          list.map((c, i) => "<li><b>" + esc(new Date(c.commit.author.date).toLocaleString()) + "</b> " + esc(c.commit.message.split("\n")[0]) + (i === 0 && c.parents.length ? ' <button type="button" class="ed-btn ed-small" data-undo="1">Undo This Publish</button>' : "") + "</li>").join("") + "</ul>";
+          list.map((c, i) => "<li><b>" + esc(new Date(c.commit.author.date).toLocaleString()) + "</b> " + esc(c.commit.message.split("\n")[0]) + (i === 0 && c.parents.length && /^Map editor:/.test(c.commit.message) ? ' <button type="button" class="ed-btn ed-small" data-undo="1">Undo This Publish</button>' : i === 0 ? ' <small class="ed-help">This newest change wasn\'t made by the editor (an upload on GitHub, say), so it can\'t be undone from here.</small>' : "") + "</li>").join("") + "</ul>";
         m.querySelector(".ed-x").addEventListener("click", close);
         const u = m.querySelector("[data-undo]");
         if (u) u.addEventListener("click", async () => {
@@ -753,9 +783,9 @@
   }
   ED.onChange(n => { if (n === "site.csv") badge(); });
   ED.start = async function () {
-    try { if (localStorage.getItem("ets_ed_theme") === "night") document.documentElement.dataset.theme = "night"; } catch (e) { /* fine */ }
+    try { if (localStorage.getItem(KEY("ed_theme")) === "night") document.documentElement.dataset.theme = "night"; } catch (e) { /* fine */ }
     await loadAll();
-    (await idb.all()).forEach(([p, b]) => { if (p.startsWith(BASE) || !BASE) PENDING.set(p, b); });
+    (await idb.all()).forEach(([p, b]) => { if (BASE ? p.startsWith(BASE) : !p.startsWith("samples/")) PENDING.set(p, b); });   // the sample's uploads stay in the sample
     ED.data = view();
     badge();
     if (EVENT) {
@@ -782,6 +812,7 @@
     ED.show(PANELS[Q.get("panel")] ? Q.get("panel") : ORDER[0]);
     updateCount();
     if (ED.restoredDrafts) ED.toast("Your unpublished changes from before are still here. Publish when ready, or throw them away with Discard All Changes in the Publish window.", 6000);
+    if (ED.catchingUp) ED.toast("GitHub is still updating the website with your last publish. You're seeing what you published.", 6000);
     if (ED.problems.length) ED.toast(ED.problems[0], 6000);
     ED.ready = true;
   };

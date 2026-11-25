@@ -105,7 +105,7 @@
     ui.buttons(mo, [{ text: "Start From the Standard Look…", onClick: () => ED.confirm("Start from the standard look?", "Colors, fonts, buttons, welcome screen and wording go back to the standard settings. Your name, start view, allowed area and places stay.", "Reset the Look", () => {
       const keep = /^(PLACE|CENTER_LAT|CENTER_LNG|ZOOM|BOUNDS_|MIN_ZOOM|MAX_ZOOM|FIT_TO_MARKERS|TIME_ZONE|PASSPORT|PASSPORT_RANKS|PRIZES|EVENT_TITLE|EVENT_TEXT|EVENT_BUTTON|MEMORY_LINK|LOCAL_IMAGERY_)/;
       ED.change("site.csv", f => { f.rows.forEach(r => { if (!keep.test(r.KEY)) r.VALUE = ""; }); f.rows = f.rows.filter(r => !String(r.KEY).startsWith("LABEL.")); }, "standard look"); ED.rerender(); }) }]);
-    ui.toggle(mo, "Editor in Night Mode", document.documentElement.dataset.theme === "night", v => { document.documentElement.dataset.theme = v ? "night" : ""; try { localStorage.setItem("ets_ed_theme", v ? "night" : ""); } catch (e) { /* fine */ } }, "Only changes this editor, on this device.");
+    ui.toggle(mo, "Editor in Night Mode", document.documentElement.dataset.theme === "night", v => { document.documentElement.dataset.theme = v ? "night" : ""; try { localStorage.setItem(ED.key("ed_theme"), v ? "night" : ""); } catch (e) { /* fine */ } }, "Only changes this editor, on this device.");
   }
 
   /* ---------- Arrange the Controls: drag tiles onto a phone ---------- */
@@ -241,7 +241,7 @@
   let emb = { place: "", tour: "", happening: "", height: 520 };
   function embed(parent) {
     ui.note(parent, "Show the map inside another website, as a box on one of its pages. Paste this into that page's HTML.");
-    const gh = (() => { try { return JSON.parse(localStorage.getItem("ets_gh") || "{}"); } catch (e) { return {}; } })();
+    const gh = (() => { try { return JSON.parse(localStorage.getItem(ED.key("gh")) || "{}"); } catch (e) { return {}; } })();
     const guess = gh.owner && gh.repo ? "https://" + gh.owner.toLowerCase() + ".github.io/" + gh.repo + "/" + (gh.folder ? gh.folder + "/" : "") : new URL(".", location.href).toString();
     const url = () => { const u = new URL(guess + "index.html"); u.searchParams.set("embed", "1"); if (emb.place) u.searchParams.set("place", emb.place); if (emb.tour) u.searchParams.set("tour", emb.tour); if (emb.happening) u.searchParams.set("happening", emb.happening); return u.toString(); };
     const code = h("textarea", "ed-code"); code.rows = 4; code.readOnly = true;

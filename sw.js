@@ -3,7 +3,7 @@
      - pages, code and data files: the newest copy from the internet when there is a connection, the saved copy when there isn't
      - photos, audio and saved map pictures: the saved copy first (they don't change)
    It never saves anything the visitor didn't ask for, and never sends anything anywhere. */
-const CACHE = "ets-offline-v1";
+const CACHE = "ets-offline-v1:" + self.registration.scope;   // one saved copy per map, even when several maps share a website
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
 

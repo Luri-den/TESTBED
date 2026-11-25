@@ -9,7 +9,7 @@
   let qr = { style: "classic", picked: new Set(), center: "badge", base: "", caption: "Scan to learn more" };
   function siteBase() {
     if (qr.base) return qr.base;
-    const gh = (() => { try { return JSON.parse(localStorage.getItem("ets_gh") || "{}"); } catch (e) { return {}; } })();
+    const gh = (() => { try { return JSON.parse(localStorage.getItem(ED.key("gh")) || "{}"); } catch (e) { return {}; } })();
     return gh.owner && gh.repo ? "https://" + gh.owner.toLowerCase() + ".github.io/" + gh.repo + "/" + (gh.folder ? gh.folder + "/" : "") : new URL(".", location.href).toString();
   }
   const darken = (hex, k) => { const n = parseInt(hex.slice(1), 16); return "#" + [16, 8, 0].map(s => Math.round(((n >> s) & 255) * k).toString(16).padStart(2, "0")).join(""); };
@@ -71,17 +71,12 @@
   let icSel = null, draft = null, tool = "pen", fill = "#3A3A3A", hist = [], redo = [];
   const icons = () => (ED.data.icons.icons = ED.data.icons.icons || {});
   function iconsPanel(side) {
-    ui.head(side, "Icons", "The little drawings on markers. Draw your own, or bring an SVG file.");
-    ui.buttons(side, [{ text: "+ Draw a New Icon", primary: true, onClick: () => { icSel = null; draft = { label: "", shapes: [], base: "" }; hist = []; redo = []; editor(); } }]);
+    ui.head(side, "Icons", "The little drawings on markers. Draw your own in the Icon Editor, or bring an SVG file.");
+    ui.note(side, "The Icon Editor has Select, Pen, Rectangle (with rounded corners), Circle and Erase, plus fill, outline, snapping, Undo and Redo. Pick an icon on its left to change it.");
     ui.file(side, "Add Your Own Icon (SVG)", ".svg,image/svg+xml", files => files[0].text().then(importSvg), "Pick an SVG file, or paste SVG text below.");
     const ta = h("textarea", "ed-input"); ta.rows = 3; ta.placeholder = "<svg …>…</svg>"; side.appendChild(ta);
-    ui.buttons(side, [{ text: "Use the Pasted SVG", onClick: () => { if (ta.value.trim()) importSvg(ta.value); } }]);
-    const all = h("div", "ic-all"); side.appendChild(all);
-    Object.keys(icons()).forEach(k => {
-      const b = h("button", "ic-card" + (icSel === k ? " on" : ""), '<img src="' + ED.iconUrl(k, 44) + '" alt=""><span>' + esc(icons()[k].label || k) + "</span>"); b.type = "button";
-      b.addEventListener("click", () => { icSel = k; const ic = icons()[k]; draft = { label: ic.label || k, shapes: [], base: ic.art || "", vb: ic.vb || "0 0 60 60", scene: ic.scene, puff: ic.puff }; hist = []; redo = []; editor(); ED.rerender(); });
-      all.appendChild(b);
-    });
+    ui.buttons(side, [{ text: "Use the Pasted SVG", onClick: () => { if (ta.value.trim()) importSvg(ta.value); } }, { text: "Simple Drawing Board", onClick: () => { icSel = null; draft = { label: "", shapes: [], base: "" }; hist = []; redo = []; editor(); }, title: "A smaller, simpler board for quick shapes" }]);
+    if (!draft) ED.inspect(box => { box.classList.add("ed-insp-wide"); box.innerHTML = '<iframe class="bld-frame" src="app/icon-editor.html' + (icSel ? "?icon=" + encodeURIComponent(icSel) : "") + '" title="Icon Editor"></iframe>'; });
   }
   // A small drawing board: Select (move), Pen (click points, double-click to finish), Rectangle, Circle, with Undo and Redo
   function editor() {
@@ -197,7 +192,7 @@
         if (!label.trim()) { ED.toast("Give it a name first."); return; }
         const key = uniqueKey(label), art = mode === "white" ? (/fill=/.test(c.art) ? whiteArt() : '<g fill="#FFFFFF">' + c.art + "</g>") : c.art;
         ED.change("icons.json", F => { F.data.icons = F.data.icons || {}; F.data.icons[key] = { label: label.trim(), vb: c.vb, art }; }, "added icon " + label);
-        close(); icSel = key; ED.rerender(); ED.toast("Added " + label + ". Pick it in any icon list.");
+        close(); icSel = key; draft = null; ED.rerender(); ED.toast("Added " + label + ". It's open in the Icon Editor to fine-tune.");
       } }]);
       draw();
     });
@@ -256,7 +251,7 @@
   }
 
   ED.panel("qr", { title: "QR Signs", render: qrPanel });
-  ED.panel("icons", { title: "Icons", render: iconsPanel, onShow: () => { if (draft) editor(); } });
+  ED.panel("icons", { title: "Icons", render: iconsPanel, onShow: () => { draft = null; ED.rerender(); } });
   ED.panel("shapes", { title: "Marker Shapes", render: shapesPanel });
   ED.panel("building", { title: "Building Designer", render: buildingPanel });
 })();

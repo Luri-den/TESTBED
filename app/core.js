@@ -22,7 +22,11 @@
   const DEBUG = Q.get("debug") === "1";
   // ?draft=1 is the editor's Preview: unpublished changes are read from this browser instead of the website
   const DRAFT = Q.get("draft") === "1";
-  const draftText = path => { try { return localStorage.getItem("ets_draft:" + path); } catch (e) { return null; } };
+  // Everything this map keeps in the browser is labeled with its own folder, because every map on the same
+  // GitHub account (luri-den.github.io/ETS/, /TESTBED/ …) shares one browser storage.
+  const SCOPE = location.pathname.replace(/[^/]*$/, "");
+  const KEY = k => "ets:" + SCOPE + ":" + k;
+  const draftText = path => { try { return localStorage.getItem(KEY("draft:" + path)); } catch (e) { return null; } };
   const draftMedia = file => { try { const ed = window.opener && window.opener.ETSEditor; return ed && ed.pendingUrl ? ed.pendingUrl(file) : ""; } catch (e) { return ""; } };
   const REDUCED = SAFE || matchMedia("(prefers-reduced-motion: reduce)").matches;
   const $ = id => document.getElementById(id);
@@ -37,8 +41,8 @@
     return /^(yes|y|true|1|on)$/i.test(String(v).trim());
   }
   const store = {
-    get(k, d) { try { const v = localStorage.getItem("ets_" + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-    set(k, v) { try { localStorage.setItem("ets_" + k, JSON.stringify(v)); } catch (e) { /* storage blocked: fine */ } }
+    get(k, d) { try { const v = localStorage.getItem(KEY(k)); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(KEY(k), JSON.stringify(v)); } catch (e) { /* storage blocked: fine */ } }
   };
 
   // CSV reader: handles quotes, commas and line breaks inside quotes. Returns a list of rows keyed by column name.
@@ -1102,17 +1106,24 @@
     applyLook();
     makeMap();
     // Extras load only when the site has something for them (and never in safe mode)
+    // The extras are fetched all at once, while the markers are drawn, instead of one after another.
+    // An indoor plan comes first because it decides which floor's markers show and whether Near Me applies.
+    let extras = Promise.resolve();
     if (!SAFE) {
       if (DATA.map.backdrop) await loadFeature("interiors");
-      if (DATA.happenings.length) await loadFeature("happenings");
-      if (DATA.routes.length) await loadFeature("tours");
-      if ((DATA.map.overlays || []).length && yes(SITE.OVERLAY_SLIDER, true)) await loadFeature("oldmaps");
-      if (!NO_REAL_PLACE && yes(SITE.NEAR_ME, true)) await loadFeature("nearme");
-      if (yes(SITE.PASSPORT, false) && !EMBED) await loadFeature("passport");
+      const want = [];
+      if (DATA.happenings.length) want.push("happenings");
+      if (DATA.routes.length) want.push("tours");
+      if ((DATA.map.overlays || []).length && yes(SITE.OVERLAY_SLIDER, true)) want.push("oldmaps");
+      if (!NO_REAL_PLACE && yes(SITE.NEAR_ME, true)) want.push("nearme");
+      if (yes(SITE.PASSPORT, false) && !EMBED) want.push("passport");
+      extras = Promise.all(want.map(loadFeature));
     }
     renderControls();
     wireSheet();
     buildMarkers();
+    await extras;
+    renderControls();
     document.addEventListener("click", e => {
       if (!e.target.closest(".pop, .ctl-search, .round, .pill")) closeMenus();
     });
