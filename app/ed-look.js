@@ -106,7 +106,36 @@
     ui.buttons(mo, [{ text: "Start From the Standard Look…", onClick: () => ED.confirm("Start from the standard look?", "Colors, fonts, buttons, welcome screen and wording go back to the standard settings. Your name, start view, allowed area and places stay.", "Reset the Look", () => {
       const keep = /^(PLACE|CENTER_LAT|CENTER_LNG|ZOOM|BOUNDS_|MIN_ZOOM|MAX_ZOOM|FIT_TO_MARKERS|TIME_ZONE|PASSPORT|PASSPORT_RANKS|PRIZES|EVENT_TITLE|EVENT_TEXT|EVENT_BUTTON|MEMORY_LINK|LOCAL_IMAGERY_)/;
       ED.change("site.csv", f => { f.rows.forEach(r => { if (!keep.test(r.KEY)) r.VALUE = ""; }); f.rows = f.rows.filter(r => !String(r.KEY).startsWith("LABEL.")); }, "standard look"); ED.rerender(); }) }]);
+    if (!ED.EVENT) ui.buttons(mo, [{ text: "Start Over With a Blank Map…", danger: true, onClick: startOverDialog }]);
     ui.toggle(mo, "Editor in Night Mode", document.documentElement.dataset.theme === "night", v => { document.documentElement.dataset.theme = v ? "night" : ""; try { localStorage.setItem(ED.key("ed_theme"), v ? "night" : ""); } catch (e) { /* fine */ } }, "Only changes this editor, on this device.");
+  }
+
+  // Start Over: blank data files, and the upload folders deleted at the next publish
+  function startOverDialog() {
+    const esc = ED.esc;
+    ED.modal("<h2>Start Over With a Blank Map</h2>" +
+      '<div class="ed-alert bad"><b>This empties the whole map.</b> Every place, category, photo, tour, happening, passport setting, old map, interior and look setting goes. Your GitHub settings stay.</div>' +
+      "<p>The data files are written over with blank ones. The folders " + ED.WIPE_FOLDERS.map(d => "<b>" + esc(d) + "</b>").join(", ") + " are deleted when you publish. Photos you uploaded but haven't published are thrown away.</p>" +
+      "<p><b>Nothing changes on the website until you publish.</b> Before that, Undo or Discard All Changes puts it all back.</p>" +
+      '<div class="ed-btnrow"><button type="button" class="ed-btn" data-backup="1">Download a Backup First</button></div><small class="ed-help" data-bmsg></small>' +
+      '<label class="ed-field"><span class="ed-label">Type START OVER to Confirm</span><input class="ed-input" data-word autocomplete="off" spellcheck="false"></label>' +
+      '<div class="ed-btnrow end"><button type="button" class="ed-btn" data-no="1">Cancel</button><button type="button" class="ed-btn ed-danger" data-yes="1" disabled>Start Over</button></div>', (m, close) => {
+      const word = m.querySelector("[data-word]"), yes = m.querySelector("[data-yes]"), bmsg = m.querySelector("[data-bmsg]");
+      word.addEventListener("input", () => { yes.disabled = word.value.trim().toUpperCase() !== "START OVER"; });
+      m.querySelector("[data-no]").addEventListener("click", close);
+      m.querySelector("[data-backup]").addEventListener("click", async e => {
+        e.target.disabled = true; bmsg.textContent = "Gathering the files…";
+        try { await ED.backupZip(t => { bmsg.textContent = t; }); bmsg.textContent = "The backup is downloading. Keep that file somewhere safe."; }
+        catch (err) { bmsg.textContent = "The backup didn't finish: " + err.message; }
+        e.target.disabled = false;
+      });
+      yes.addEventListener("click", () => {
+        close(); ED.startOver();
+        ED.toast("The map is blank. Publish to make it official. Changed your mind? Press Undo.", 7000);
+        if (ED.runSetup) setTimeout(() => ED.runSetup(), 300);
+      });
+    });
+    setTimeout(() => { const w = document.querySelector(".ed-modal [data-word]"); if (w) w.focus(); }, 50);
   }
 
   /* ---------- Arrange the Controls: drag tiles onto a phone ---------- */

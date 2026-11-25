@@ -155,6 +155,7 @@
   const LISTENERS = []; ED.onChange = fn => LISTENERS.push(fn);
   ED.undo = function () {
     const u = UNDO.pop(); if (!u) return;
+    if (u.name === "*startover") { undoStartOver(u); ED.data = view(); afterChange("all"); rerender(); rerenderInspector(); ED.toast("Undone: Start Over. Everything is back."); return; }
     const f = F[u.name]; const fresh = load1(u.name, u.text); Object.assign(f, { cols: fresh.cols, rows: fresh.rows, data: fresh.data });
     f.text = serialize(f); setDraft(f.path, f.text === f.orig ? null : f.text);
     if (ED.selected && ED.selected.ID) { ED.data = view(); ED.selected = ED.data.byId.get(ED.selected.ID) || null; }
@@ -171,8 +172,39 @@
   const EXTRA_FILES = new Map();     // other text files to publish (a new event folder's event.json)
   ED.addExtraFile = (path, text) => { EXTRA_FILES.set(path, text); setDraft(path, text); updateCount(); };
   ED.changedFiles = changedFiles;
+
+  // Start Over: the nine data files become blank, and the folders of uploaded files are deleted at the next publish.
+  // Until then, Undo or Discard All Changes puts everything back.
+  const WIPE_FOLDERS = ["media/", "events/", "overlays/"].map(d => BASE + d);
+  const wipeKey = () => KEY("wipe");
+  let WIPE = false; try { WIPE = localStorage.getItem(wipeKey()) === "1"; } catch (e) { /* fine */ }
+  function setWipe(on) { WIPE = !!on; try { if (on) localStorage.setItem(wipeKey(), "1"); else localStorage.removeItem(wipeKey()); } catch (e) { /* fine */ } updateCount(); }
+  ED.wipePending = () => WIPE; ED.WIPE_FOLDERS = WIPE_FOLDERS;
+  ED.startOver = function () {
+    if (EVENT) return;
+    const snap = { name: "*startover", label: "Start Over", texts: {}, pending: [...PENDING.entries()], extra: [...EXTRA_FILES.entries()], wipe: WIPE };
+    FILES.forEach(n => {
+      const f = F[n]; snap.texts[n] = f.text;
+      const blank = load1(n, null); Object.assign(f, { cols: blank.cols, rows: blank.rows, data: blank.data });
+      f.text = serialize(f); setDraft(f.path, f.text === f.orig ? null : f.text);
+    });
+    PENDING.forEach((b, p) => idb.del(p)); PENDING.clear();          // unpublished uploads would land in the deleted folders
+    EXTRA_FILES.forEach((t, p) => setDraft(p, null)); EXTRA_FILES.clear();
+    UNDO.push(snap);
+    try { localStorage.removeItem(KEY("setup_done")); } catch (e) { /* fine */ }
+    setWipe(true);
+    ED.selected = null; ED.closeInspector && ED.closeInspector();
+    afterChange("all"); rerender();
+  };
+  function undoStartOver(u) {
+    FILES.forEach(n => { const f = F[n]; const fresh = load1(n, u.texts[n]); Object.assign(f, { cols: fresh.cols, rows: fresh.rows, data: fresh.data }); f.text = serialize(f); setDraft(f.path, f.text === f.orig ? null : f.text); });
+    u.pending.forEach(([p, b]) => { PENDING.set(p, b); idb.put(p, b); });
+    u.extra.forEach(([p, t]) => { EXTRA_FILES.set(p, t); setDraft(p, t); });
+    try { localStorage.setItem(KEY("setup_done"), "1"); } catch (e) { /* fine */ }
+    setWipe(u.wipe);
+  }
   function updateCount() {
-    const n = changedFiles().length + PENDING.size;
+    const n = changedFiles().length + PENDING.size + (WIPE ? 1 : 0);
     const c = $("edCount"); c.hidden = !n; c.textContent = n;
     $("edUndo").disabled = !UNDO.length;
   }
@@ -588,6 +620,7 @@
       } else lines.push([c.path, c.name === "event.json" ? "event folder settings" : "changed"]);
     });
     PENDING.forEach((b, p) => lines.push([p, "new file (" + Math.max(1, Math.round(b.size / 1024)) + " KB)"]));
+    if (WIPE) WIPE_FOLDERS.forEach(d => lines.unshift([d, "every file in this folder will be deleted (Start Over)"]));
     return lines;
   }
   ED.summary = summary;
@@ -635,11 +668,12 @@
       let force = false;
       m.querySelector("[data-go]").addEventListener("click", async e => {
         e.target.disabled = true;
+        const wiping = WIPE;
         try {
           if (seg() === "zip") { await publishZip(m.querySelector('[name="whole"]').checked, say); }
           else { const v = read(); if (!v.owner || !v.repo || !v.token) throw new Error("Fill in Owner, Repository and Access Token first."); await publishGitHub(v, say, force); }
           finishPublish(seg() !== "zip");
-          say(seg() === "zip" ? "The ZIP is downloading. Upload its files to your host to finish." : "Published. The website updates in about a minute.", 100);
+          say(seg() === "zip" ? (wiping ? "The ZIP is downloading. On your host, delete the media, events and overlays folders, then upload the ZIP's files." : "The ZIP is downloading. Upload its files to your host to finish.") : "Published. The website updates in about a minute.", 100);
         } catch (err) {
           if (err.conflicts) { force = true; say("Someone else changed " + err.conflicts.join(", ") + " on GitHub since this editor opened. Publishing now would replace their changes. Reload the editor to get them first, or press Publish Anyway.", 0); e.target.textContent = "Publish Anyway"; }
           else say("Publish didn't finish: " + err.message, 0);
@@ -655,7 +689,7 @@
     if (EVENT) { ED.eventOrig = JSON.stringify(eventInfo, null, 2) + "\n"; setDraft(eventDir() + "event.json", null); }
     EXTRA_FILES.forEach((t, p) => setDraft(p, null)); EXTRA_FILES.clear();
     PENDING.forEach((b, p) => idb.del(p)); PENDING.clear();
-    UNDO.length = 0; updateCount();
+    UNDO.length = 0; setWipe(false);
     $("edSaved").textContent = "Published";
   }
 
@@ -680,7 +714,7 @@
   async function publishGitHub(v, say, force) {
     const pre = v.folder ? v.folder + "/" : "";
     const files = changedFiles(), media = [...PENDING.entries()];
-    if (!files.length && !media.length) throw new Error("Nothing has changed.");
+    if (!files.length && !media.length && !WIPE) throw new Error("Nothing has changed.");
     say("Connecting to GitHub…", 5);
     if (!force) {                     // has anyone else changed these files since this editor opened?
       const conflicts = [];
@@ -696,8 +730,16 @@
     const tree = []; const total = files.length + media.length; let n = 0;
     for (const f of files) { const b = await gh(v, "POST", "/git/blobs", { content: f.text, encoding: "utf-8" }); tree.push({ path: pre + f.path, mode: "100644", type: "blob", sha: b.sha }); say("Sending " + f.path, 10 + 80 * (++n) / total); }
     for (const [p, blob] of media) { const b = await gh(v, "POST", "/git/blobs", { content: await b64(blob), encoding: "base64" }); tree.push({ path: pre + p, mode: "100644", type: "blob", sha: b.sha }); say("Sending " + p, 10 + 80 * (++n) / total); }
+    if (WIPE) {                     // Start Over: delete every published file in the upload folders (new uploads since then stay)
+      say("Listing the old files to delete…", 92);
+      const all = await gh(v, "GET", "/git/trees/" + commit.tree.sha + "?recursive=1");
+      if (all.truncated) throw new Error("This repository is too big for GitHub to list in one go, so the old files can't be deleted from here. Delete the media, events and overlays folders on GitHub (or with GitHub Desktop), then publish again.");
+      const keep = new Set(tree.map(x => x.path)), dirs = WIPE_FOLDERS.map(d => pre + d);
+      all.tree.forEach(x => { if (x.type === "blob" && dirs.some(d => x.path.startsWith(d)) && !keep.has(x.path)) tree.push({ path: x.path, mode: x.mode, type: "blob", sha: null }); });
+      if (!tree.length) throw new Error("Nothing has changed.");
+    }
     const t = await gh(v, "POST", "/git/trees", { base_tree: commit.tree.sha, tree });
-    const msg = "Map editor: " + summary().slice(0, 6).map(l => l[0].split("/").pop() + " " + l[1]).join("; ").slice(0, 300);
+    const msg = (WIPE ? "Map editor: Start Over. " : "Map editor: ") + summary().filter(l => !WIPE_FOLDERS.includes(l[0])).slice(0, 6).map(l => l[0].split("/").pop() + " " + l[1]).join("; ").slice(0, 300);
     const c = await gh(v, "POST", "/git/commits", { message: msg, tree: t.sha, parents: [head] });
     await gh(v, "PATCH", "/git/refs/heads/" + encodeURIComponent(v.branch || "main"), { sha: c.sha });
     say("Published.", 100);
@@ -750,6 +792,7 @@
     "app/editor.css", "app/ed-core.js", "app/ed-items.js", "app/ed-tours.js", "app/ed-haps.js", "app/ed-passport.js", "app/ed-look.js", "app/ed-map.js", "app/ed-setup.js", "app/tools.js", "app/tools-import.js", "app/qrcode-lite.js", "app/icon-editor.html", "app/building.html", "GUIDE.md",
     "app/vendor/maplibre-gl.js", "app/vendor/maplibre-gl.css"];
   ED.APP_FILES = APP_FILES;
+  ED.backupZip = say => publishZip(true, say || (() => {}));
   async function publishZip(whole, say) {
     const enc = new TextEncoder(), entries = [], have = new Set();
     const add = (path, data) => { if (have.has(path)) return; have.add(path); entries.push({ path: BASE && path.startsWith(BASE) ? path.slice(BASE.length) : path, data }); };
@@ -850,7 +893,7 @@
   function mergedSite() { const f = F["site.csv"], base = Object.assign({}, f.base || {}); f.rows.forEach(r => { base[r.KEY] = r.VALUE; }); return toCSV(["KEY", "VALUE"], Object.keys(base).map(k => ({ KEY: k, VALUE: base[k] }))); }
   ED.discardAll = function () {
     FILES.forEach(n => { const f = F[n]; setDraft(f.path, null); const fresh = load1(n, f.orig); Object.assign(f, { cols: fresh.cols, rows: fresh.rows, data: fresh.data }); f.text = serialize(f); });
-    PENDING.forEach((b, p) => idb.del(p)); PENDING.clear(); EXTRA_FILES.forEach((t, p) => setDraft(p, null)); EXTRA_FILES.clear(); UNDO.length = 0;
+    PENDING.forEach((b, p) => idb.del(p)); PENDING.clear(); EXTRA_FILES.forEach((t, p) => setDraft(p, null)); EXTRA_FILES.clear(); UNDO.length = 0; setWipe(false);
     afterChange("all"); rerender(); ED.closeInspector(); ED.toast("Changes discarded. Back to the published map.");
   };
 })();
