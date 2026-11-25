@@ -1,0 +1,11 @@
+{
+  "title": "Old Courthouse (Sample)",
+  "kind": "interior",
+  "overrides": [
+    "items.csv",
+    "map.json",
+    "categories.csv",
+    "site.csv",
+    "media.csv"
+  ]
+}

@@ -1,1 +1,11 @@
 TYPE,ID,TITLE,CATEGORY,ICON,STARS,RANKS,NEEDS,HINT,BUTTON,SCOPE,TARGET,COUNT,REWARD,CODE,ORDER
+stamp,EXPLORER,Explorer,HIST,courthouse,1|2|3,Newcomer|Neighbor|Town Expert,see-story|see-spot|downtown-2,,,,,,,,
+stamp,WALKER,Walker,,walk,1|2|3,Stroller|Walker|Trailblazer,ride-tour|visit-park|visit-diner,,,,,,,,
+task,see-story,Find a Story,,,,,,Look for the sparkle on the map.,Show Stories,behavior,story,,,,
+task,see-spot,Find a Photo Spot,,,,,,Look for the camera on the map.,Show Photo Spots,behavior,spot,,,,
+task,downtown-2,Visit 2 History Places,,,,,,Open two places in History.,Show History,category,HIST,2,,,
+task,ride-tour,Finish Any Tour,,,,,,Take a tour to its last stop.,Show Tours,behavior,tour,,,,
+task,visit-park,Visit Riverside Park,,,,,,Open the park on the map.,Show the Park,item,SAMPLE-02,,,,
+task,visit-diner,Visit the Diner,,,,,,Open the diner on the map.,Show the Diner,item,SAMPLE-03,,,,
+prize,PIE,Free Slice of Pie (Sample),,,,,EXPLORER:2,,,,,,Show this screen at the Sample Diner.,PIE-2026,1
+prize,BADGE,Sample Town Pin,,,,,SAMPLE-01-01|SAMPLE-02|SAMPLE-03,,,,,,Show this screen at the visitor center.,,2

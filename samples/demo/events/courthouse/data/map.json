@@ -1,0 +1,25 @@
+{
+  "outline": null,
+  "overlays": [],
+  "backdrop": {
+    "title": "Old Courthouse (Sample)",
+    "background": "#F4F1EA",
+    "floors": [
+      {
+        "id": "ground",
+        "name": "Ground Floor",
+        "image": "plans/ground.svg"
+      },
+      {
+        "id": "upper",
+        "name": "Upper Floor",
+        "image": "plans/upper.svg"
+      }
+    ],
+    "scale": {
+      "across": 120,
+      "unit": "ft"
+    },
+    "credit": "Sample plan"
+  }
+}

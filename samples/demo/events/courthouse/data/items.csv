@@ -1,0 +1,5 @@
+ID,KIND,PART_OF,NAME,OTHER_NAMES,ADDRESS,YEAR_START,YEAR_END,LAT,LONG,CATEGORY,MAJOR,TEXT,BLURB,SOURCE,CREDIT,SERIES,ORDER,CHECKIN,RADIUS,INSIDE,FLOOR,ICON,ICON_COLOR,EFFECT,WEBSITE,PHONE,HOURS,ORG,SHAPE,SHOW_MEMBERS,STAFF_NOTE
+CH-01,place,,Front Hall,,,,,-0.0012,-0.0015,ROOM,,Where visitors come in. (Sample),,,,,,,,,ground,,,,,,,,,,
+CH-02,place,,Court Room,,,,,0.001,0.0012,ROOM,,"The old court room, upstairs. (Sample)",,,,,,,,,upper,,,,,,,,,,
+CH-03,place,,Clock Exhibit,,,,,0.0008,-0.0012,EXHIBIT,,A sample exhibit on the ground floor.,,,,,,,,,ground,,,,,,,,,,
+CH-04,place,,Judge's Chair,,,,,0.0002,0.0016,EXHIBIT,,A sample exhibit upstairs.,,,,,,,,,upper,,,,,,,,,,

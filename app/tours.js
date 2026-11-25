@@ -7,7 +7,9 @@
      MODES (walk | hike | bike | drive | virtual, separated by |), LENGTH_MI, MINUTES (blank = worked out), EFFORT,
      STYLE (solid | dashed | rail), COLOR, WIDTH (pixels), OPACITY (0 to 1),
      SPIN (yes | no | blank = the site setting), AVAILABILITY (blank = always; "event" = only while a happening features it),
-     STOPS: [ { ITEM, NOTE, VEHICLE }, ... ] in order.
+     SHOW_ALWAYS (yes = keep the line on the map even when the tour isn't open; plain lines always show),
+     VEHICLE (the moving picture between stops: walk, bike, car, train, trainmodern, boat, or any icon; blank = picked from MODES),
+     STOPS: [ { ITEM, NOTE, VEHICLE }, ... ] in order. A stop's VEHICLE is what carries you TO that stop.
    Site settings: TOUR_SPIN (yes/no), TOUR_SPIN_SPEED (slow | medium | fast), TOUR_TILT (0 to 60), TOUR_TIME_BUTTONS (minutes, like 30,60,120). */
 (function () {
   "use strict";
@@ -42,7 +44,8 @@
       id: String(p.ID), type, title: p.TITLE || p.NAME || p.ID, intro: p.INTRO || "", summary: p.SUMMARY || "", category: p.CATEGORY || "",
       modes: list(p.MODES), length: parseFloat(p.LENGTH_MI) || (coords.length > 1 ? Math.round(pathMiles(coords) * 10) / 10 : 0),
       minutesSet: parseFloat(p.MINUTES) || 0, effort: p.EFFORT || "", spin: String(p.SPIN || "").toLowerCase(),
-      eventOnly: String(p.AVAILABILITY || "").toLowerCase() === "event", coords, stops, feature: f
+      eventOnly: String(p.AVAILABILITY || "").toLowerCase() === "event", always: /^(y|yes|true|1)$/i.test(p.SHOW_ALWAYS || ""),
+      vehicle: String(p.VEHICLE || "").trim().toLowerCase(), coords, stops, feature: f
     };
   });
   const TOURS = ROUTES.filter(r => r.type !== "line");
@@ -73,17 +76,18 @@
   const opac = ["to-number", ["coalesce", ["get", "OPACITY"], 1]];
   const isStyle = s => ["==", ["coalesce", ["get", "STYLE"], "solid"], s];
   function routesData(activeId) {
-    return { type: "FeatureCollection", features: ROUTES.filter(r => r.coords.length > 1 && (r.type === "line" || isOpen(r))).map(r => {
+    // Plain lines always show. A tour or trail shows only while it's open (or marked SHOW_ALWAYS).
+    return { type: "FeatureCollection", features: ROUTES.filter(r => r.coords.length > 1 && (r.type === "line" || r.id === activeId || r.id === PREVIEW || (r.always && isOpen(r)))).map(r => {
       const p = Object.assign({}, r.feature.properties); delete p.STOPS;
-      p._active = activeId ? (r.id === activeId ? 1 : 0) : -1;
+      p._active = ACTIVE ? (r.id === activeId ? 1 : 0) : 1;
       return { type: "Feature", properties: p, geometry: r.feature.geometry };
     }) };
   }
-  let ACTIVE = null;
+  let ACTIVE = null, PREVIEW = null;
   const fade = ["case", ["==", ["get", "_active"], 0], 0.25, 1];
   C.onStyle(map => {
     if (map.getSource("ets-routes")) return;
-    map.addSource("ets-routes", { type: "geojson", data: routesData(ACTIVE && ACTIVE.t.id) });
+    map.addSource("ets-routes", { type: "geojson", data: routesData(ACTIVE ? ACTIVE.t.id : PREVIEW) });
     map.addLayer({ id: "ets-routes-solid", type: "line", source: "ets-routes", filter: isStyle("solid"), layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": color, "line-width": width, "line-opacity": ["*", opac, fade] } });
     map.addLayer({ id: "ets-routes-dashed", type: "line", source: "ets-routes", filter: isStyle("dashed"), layout: { "line-cap": "butt", "line-join": "round" }, paint: { "line-color": color, "line-width": width, "line-opacity": ["*", opac, fade], "line-dasharray": [2, 1.5] } });
     map.addLayer({ id: "ets-routes-band", type: "line", source: "ets-routes", filter: isStyle("rail"), layout: { "line-join": "round" }, paint: { "line-color": color, "line-width": width, "line-opacity": ["*", opac, fade] } });
@@ -91,7 +95,7 @@
     map.addLayer({ id: "ets-routes-railA", type: "line", source: "ets-routes", filter: isStyle("rail"), layout: { "line-join": "round" }, paint: { "line-color": color, "line-width": 1.6, "line-offset": off(1), "line-opacity": fade } });
     map.addLayer({ id: "ets-routes-railB", type: "line", source: "ets-routes", filter: isStyle("rail"), layout: { "line-join": "round" }, paint: { "line-color": color, "line-width": 1.6, "line-offset": off(-1), "line-opacity": fade } });
   });
-  function refreshLines() { const s = C.map && C.map.getSource && C.map.getSource("ets-routes"); if (s) s.setData(routesData(ACTIVE && ACTIVE.t.id)); }
+  function refreshLines() { const s = C.map && C.map.getSource && C.map.getSource("ets-routes"); if (s) s.setData(routesData(ACTIVE ? ACTIVE.t.id : PREVIEW)); }
 
   /* ---------- the Tours button and list ---------- */
   const ROUTE_ICON = '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2.5"></circle><circle cx="18" cy="6" r="2.5"></circle><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"></path></svg>';
@@ -130,7 +134,7 @@
     body.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => start(b.dataset.go)));
   }
   const byId = id => TOURS.find(t => t.id === id);
-  function openList() { if (ACTIVE) endTour(true); C.highlight(null); C.openSheetHtml(listHtml(), wireList, "open"); C.setUrl({ place: null, happening: null, tour: null }); }
+  function openList() { if (ACTIVE) endTour(true); PREVIEW = null; refreshLines(); C.highlight(null); C.openSheetHtml(listHtml(), wireList, "open"); C.setUrl({ place: null, happening: null, tour: null }); }
 
   function overview(t) {
     if (!t) return;
@@ -145,6 +149,8 @@
       body.querySelector("[data-go]").addEventListener("click", () => start(t.id));
       body.querySelector("[data-share]").addEventListener("click", () => shareTour(t));
     }, "open");
+    PREVIEW = t.id; refreshLines();
+    C.onSheetClose = () => { if (!ACTIVE) { PREVIEW = null; refreshLines(); } };
     frame(t, false);
     C.setUrl({ place: null, happening: null, tour: t.id });
   }
@@ -167,6 +173,7 @@
     const pts = framePoints(t); if (!pts.length) return;
     const tilt = Math.max(0, Math.min(60, parseFloat(C.SITE.TOUR_TILT) || 0));
     const pad = { top: touring ? 110 : 150, bottom: C.sheetPad() + 10, left: C.desktop() ? 460 : 50, right: 50 };
+    if (C.Q.get("camdebug") === "1") camBox(pad);     // ?camdebug=1 outlines the part of the screen the tour is framed in
     if (pts.length === 1) map.easeTo({ center: pts[0], zoom: 16, pitch: touring ? tilt : 0, bearing: 0, padding: pad, duration: C.REDUCED ? 0 : 700 });
     else map.fitBounds(C.boundsOf(pts), { padding: pad, maxZoom: 17, pitch: touring ? tilt : 0, bearing: 0, duration: C.REDUCED ? 0 : 700 });
     const spinOn = t.spin === "yes" || (t.spin !== "no" && /^(y|yes|true|1)$/i.test(C.SITE.TOUR_SPIN || ""));
@@ -179,6 +186,12 @@
         stopSpin(); spinRaf = requestAnimationFrame(step);
       }, 900);
     }
+  }
+  function camBox(pad) {
+    let el = document.getElementById("camDebug");
+    if (!el) { el = document.createElement("div"); el.id = "camDebug"; el.className = "cam-debug"; document.body.appendChild(el); }
+    Object.assign(el.style, { top: pad.top + "px", bottom: pad.bottom + "px", left: pad.left + "px", right: pad.right + "px" });
+    el.textContent = "Tour frame: top " + pad.top + ", bottom " + pad.bottom + ", left " + pad.left + ", right " + pad.right;
   }
   if (C.map) ["mousedown", "touchstart", "wheel", "dragstart"].forEach(ev => C.map.on(ev, stopSpin));   // stops the moment the visitor touches the map
 
@@ -193,7 +206,7 @@
       el.className = "tour-stop" + (i < ACTIVE.i ? " done" : i === ACTIVE.i ? " here" : "");
       el.setAttribute("aria-label", L("stopOf", { n: i + 1, total: ACTIVE.t.stops.length }) + ": " + (s.item.NAME || s.id));
       el.innerHTML = i < ACTIVE.i ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>' : String(i + 1);
-      el.addEventListener("click", e => { e.stopPropagation(); showStop(i); });
+      el.addEventListener("click", e => { e.stopPropagation(); TRAVEL++; clearVehicle(); showStop(i); });
       stopMarkers.push(new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([s.item.lng, s.item.lat]).addTo(C.map));
     });
   }
@@ -212,7 +225,7 @@
     if (!t) { C.warn("Tour " + id + " isn't listed."); return; }
     if (!isOpen(t)) { C.warn("Tour " + id + " is only open during its happening."); return; }
     stopSpin();
-    ACTIVE = { t, i: 0 };
+    ACTIVE = { t, i: 0 }; PREVIEW = null; TRAVEL++;
     C.setTouring(true); C.highlight(null);
     refreshLines(); tourBar(); drawStops();
     frame(t, true);
@@ -247,6 +260,7 @@
       '<div class="tour-progress" aria-label="' + esc(L("stopOf", { n: ACTIVE.i + 1, total: n })) + '">' + t.stops.map((_, k) => '<span class="' + (k <= ACTIVE.i ? "on" : "") + '"></span>').join("") + "</div>" +
       '<div class="c-kind tour-step">' + esc(L("stopOf", { n: ACTIVE.i + 1, total: n }).toUpperCase()) + "</div>" +
       '<h2 class="c-title">' + esc(it.NAME || it.ID) + "</h2>" +
+      (it.hasPos && !C.noRealPlace ? '<div class="c-near" data-near-ll="' + it.lng + "," + it.lat + '" hidden></div>' : "") +
       (photo ? '<img class="tour-photo" src="' + esc(C.mediaUrl(photo.FILE)) + '" alt="">' : "") +
       (text ? '<p class="tour-note">' + esc(text.length > 220 ? text.slice(0, 217) + "…" : text) + "</p>" : "") +
       (media.length ? '<div class="media-row tour-audio"><button type="button" class="play" data-audio="1" aria-label="' + esc(L("listen")) + '">' + C.svgI("play") + '</button><div class="m-text"><div class="m-title">' + esc(media[0].CAPTION || L("listen")) + (media[0].SECONDS ? " · " + esc(fmtSecs(media[0].SECONDS)) : "") + '</div>' + (media[0].TRANSCRIPT ? '<details><summary>' + esc(L("transcript")) + "</summary><p>" + esc(media[0].TRANSCRIPT) + "</p></details>" : "") + '<div class="m-player"></div></div></div>' : "") +
@@ -256,8 +270,8 @@
       '<button type="button" class="linkish tour-more" data-more="1">' + esc(L("aboutPlace")) + "</button>";
     C.setPeek(Math.min(innerHeight * 0.62, (photo ? 470 : 340) + (media.length ? 70 : 0)));
     C.openSheetHtml(html, body => {
-      const p = body.querySelector("[data-prev]"); if (p) p.addEventListener("click", () => showStop(ACTIVE.i - 1));
-      const nx = body.querySelector("[data-next]"); if (nx) nx.addEventListener("click", () => showStop(ACTIVE.i + 1));
+      const p = body.querySelector("[data-prev]"); if (p) p.addEventListener("click", () => { TRAVEL++; clearVehicle(); showStop(ACTIVE.i - 1); });
+      const nx = body.querySelector("[data-next]"); if (nx) nx.addEventListener("click", () => goNext(nx));
       const dn = body.querySelector("[data-done]"); if (dn) dn.addEventListener("click", finish);
       body.querySelector("[data-more]").addEventListener("click", () => { C.setPeek(null); C.openCard(it); addResume(); });
       const au = body.querySelector("[data-audio]");
@@ -265,6 +279,84 @@
     }, "peek");
     if (!keepCamera && it.hasPos && C.map) { stopSpin(); C.map.easeTo({ center: [it.lng, it.lat], zoom: Math.max(C.map.getZoom(), 16), padding: { top: 110, bottom: Math.min(innerHeight * 0.62, 360) + 20, left: C.desktop() ? 460 : 0, right: 0 }, duration: C.REDUCED ? 0 : 700 }); }
     document.dispatchEvent(new CustomEvent("ets:tourstop", { detail: { tour: t.id, stop: ACTIVE.i, item: it.ID } }));
+  }
+  /* ---------- the travel animation: a little vehicle rides the route to the next stop ---------- */
+  let TRAVEL = 0, vehicleMarker = null;
+  const MODE_VEHICLE = { walk: "walk", hike: "walk", bike: "bike", drive: "car" };
+  function clearVehicle() { if (vehicleMarker) vehicleMarker.remove(); vehicleMarker = null; }
+  function nearOnLine(line, p) {      // the closest spot on the line to a point
+    const k = Math.cos(rad(p[1])); let best = null;
+    for (let i = 0; i < line.length - 1; i++) {
+      const a = line[i], b = line[i + 1], dx = (b[0] - a[0]) * k, dy = b[1] - a[1], LL = dx * dx + dy * dy;
+      const u = LL ? Math.max(0, Math.min(1, ((p[0] - a[0]) * k * dx + (p[1] - a[1]) * dy) / LL)) : 0;
+      const pt = [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
+      const d = meters(p, pt);
+      if (!best || d < best.d) best = { i, u, d, pt };
+    }
+    return best;
+  }
+  function legPath(line, from, to) {  // the piece of the route between two stops, in travel order
+    if (!line || line.length < 2) return [from, to];
+    const a = nearOnLine(line, from), b = nearOnLine(line, to);
+    if (a.d > 800 || b.d > 800) return [from, to];          // stop is far from the drawn line: go straight
+    const fwd = a.i < b.i || (a.i === b.i && a.u <= b.u), s0 = fwd ? a : b, e0 = fwd ? b : a;
+    const path = [s0.pt].concat(line.slice(s0.i + 1, e0.i + 1), [e0.pt]);
+    if (!fwd) path.reverse();
+    return [from].concat(path, [to]);
+  }
+  function alongPath(path, segs, total, f) {
+    let want = f * total;
+    for (let i = 0; i < segs.length; i++) {
+      if (want <= segs[i] || i === segs.length - 1) { const g = segs[i] ? Math.min(1, want / segs[i]) : 0, a = path[i], b = path[i + 1]; return [a[0] + (b[0] - a[0]) * g, a[1] + (b[1] - a[1]) * g]; }
+      want -= segs[i];
+    }
+    return path[path.length - 1];
+  }
+  const SCENE = { rail: "rail", water: "boat", road: "car" };
+  function vehicleEl(key) {
+    const ic = C.DATA.icons.icons[key] || C.DATA.icons.icons.walk;
+    const wrap = document.createElement("div");
+    if (!ic) { wrap.className = "travel-dot"; return wrap; }
+    wrap.className = "travel-clip " + (SCENE[ic.scene] || "");
+    wrap.innerHTML = '<div class="scene"><div class="env"></div><div class="vehicle"><svg viewBox="' + esc(ic.vb || "0 0 60 30") + '" width="60" height="30" aria-hidden="true">' + (ic.art || "") + "</svg></div>" +
+      (ic.puff ? '<div class="puff"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="6" cy="10" r="4" fill="#fff" opacity=".85"></circle><circle cx="10" cy="7" r="3" fill="#fff" opacity=".6"></circle></svg></div>' : "") + "</div>";
+    return wrap;
+  }
+  function travel(from, to, key) {
+    return new Promise(done => {
+      const map = C.map, my = ++TRAVEL;
+      const pad = { top: 110, bottom: C.sheetPad() + 10, left: C.desktop() ? 460 : 0, right: 0 };
+      if (C.REDUCED || !map || !window.maplibregl) { if (map) map.easeTo({ center: to, zoom: Math.max(map.getZoom(), 16), padding: pad, duration: 0 }); return done(true); }
+      const path = legPath(ACTIVE.t.coords, from, to), segs = [];
+      let total = 0; for (let i = 1; i < path.length; i++) { const d = meters(path[i - 1], path[i]); segs.push(d); total += d; }
+      const ms = Math.min(4500, Math.max(1400, total * 3));
+      clearVehicle();
+      vehicleMarker = new maplibregl.Marker({ element: vehicleEl(key), anchor: "center" }).setLngLat(from).addTo(map);
+      map.jumpTo({ center: from, zoom: Math.max(Math.min(map.getZoom(), 17), 15.5), padding: pad });
+      const t0 = performance.now();
+      const step = now => {
+        if (my !== TRAVEL) { clearVehicle(); return done(false); }   // the tour ended or something else moved on
+        const f = Math.min(1, (now - t0) / ms), e = f < .5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;   // gentle start and stop
+        const pos = alongPath(path, segs, total, e);
+        vehicleMarker.setLngLat(pos); map.jumpTo({ center: pos });
+        if (f < 1) requestAnimationFrame(step);
+        else { clearVehicle(); map.easeTo({ center: to, zoom: Math.max(map.getZoom(), 16.5), padding: pad, duration: 500 }); setTimeout(() => done(my === TRAVEL), 500); }
+      };
+      requestAnimationFrame(step);
+    });
+  }
+  async function goNext(btn) {
+    if (!ACTIVE || btn.disabled) return;
+    const t = ACTIVE.t, a = t.stops[ACTIVE.i], b = t.stops[ACTIVE.i + 1];
+    if (!b) return;
+    stopSpin();
+    const key = (b.vehicle || t.vehicle || MODE_VEHICLE[mode(t)] || "").toLowerCase();
+    if (a.item.hasPos && b.item.hasPos && mode(t) !== "virtual") {
+      btn.disabled = true; btn.classList.add("busy");
+      const ok = await travel([a.item.lng, a.item.lat], [b.item.lng, b.item.lat], key);
+      if (!ok || !ACTIVE) return;
+    }
+    showStop(ACTIVE.i + 1, true);
   }
   const fmtSecs = s => { s = Math.round(+s || 0); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
   function addResume() {          // when a stop's full card is open, offer a way back to the tour
@@ -281,8 +373,8 @@
       body => body.querySelector("[data-end]").addEventListener("click", () => endTour()), "peek");
   }
   function endTour(quiet) {
-    stopSpin();
-    ACTIVE = null;
+    stopSpin(); TRAVEL++; clearVehicle();
+    ACTIVE = null; PREVIEW = null;
     C.setTouring(false); C.setPeek(null);
     stopMarkers.forEach(m => m.remove()); stopMarkers = [];
     tourBar(); refreshLines();

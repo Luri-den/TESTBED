@@ -103,7 +103,9 @@
     emptyTitle: "This map is ready to be set up", emptyText: "Open the editor to choose your area and add your first places.",
     since: "Since {y}", listen: "Listen", watch: "Watch", transcript: "Transcript", group: "Group",
     photoSpot: "Photo Spot", story: "Story", about: "About", usOnly: "Only available for places in the United States",
-    hours: "Hours", address: "Address", home: "Back to Start View", exitEvent: "Back to Main Map", exitShort: "Exit", eventMap: "Event Map"
+    hours: "Hours", address: "Address", home: "Back to Start View", exitEvent: "Back to Main Map", exitShort: "Exit", eventMap: "Event Map",
+    memory: "Do you have a memory of this place? Share it", series: "Series: {name}", ofN: "{n} of {total}", legend: "Legend", stepInside: "Step Inside", inside: "Inside",
+    saveOffline: "Save for Offline Use", photoOf: "Photo {n} of {total}", prev: "Previous", next: "Next", zoomIn: "Zoom In", zoomOut: "Zoom Out"
   };
   let SITE = {};
   const L = (k, vars) => {
@@ -119,7 +121,7 @@
     const ev = (Q.get("event") || "").replace(/[^a-z0-9_-]/gi, "");
     if (ev) {
       const ej = await getJSON("event.json", BASE + "events/" + ev + "/");
-      if (ej) EVENT = { name: ev, overrides: ej.overrides || [], title: ej.title || ev, media: new Set() };
+      if (ej) EVENT = { name: ev, overrides: ej.overrides || [], title: ej.title || ev, kind: ej.kind || "event", media: new Set() };
       else warn("The event \"" + ev + "\" wasn't found, so the main map is shown.");
     }
     const siteRows = await getCSV("site.csv");
@@ -135,6 +137,11 @@
     ]);
     DATA.happenings = haps;
     DATA.routes = (routes && Array.isArray(routes.features)) ? routes.features.filter(f => f && f.properties && f.properties.ID) : [];
+    if (EVENT && EVENT.kind === "interior") {     // inside a building: the main map's happenings, tours and passport stay outside unless the folder has its own
+      if (!EVENT.overrides.includes("happenings.csv")) DATA.happenings = [];
+      if (!EVENT.overrides.includes("routes.geojson")) DATA.routes = [];
+      if (!EVENT.overrides.includes("passport.csv")) SITE.PASSPORT = "no";
+    }
     if (EVENT) media.forEach(m => m.FILE && EVENT.media.add(m.FILE));
     DATA.map = map || { outline: null, overlays: [], backdrop: null };
     DATA.icons = icons || { icons: {}, shapes: {} };
@@ -199,6 +206,14 @@
     const tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.content = rgbStr(accent);
     if (EMBED) document.body.classList.add("embed");
     if (REDUCED) document.body.classList.add("reduced");
+    const tone = String(SITE.MAP_TONE || "").toLowerCase();             // Warm or Muted street map (the street map only)
+    if (!SAFE && (tone === "warm" || tone === "muted")) document.body.dataset.tone = tone;
+    if (String(SITE.BAR_STYLE || "").toLowerCase() === "bar") document.body.classList.add("square");   // squarer corners on the bar and buttons
+    if (String(SITE.LAYOUT_STYLE || "").toLowerCase() === "band") document.body.classList.add("band");  // a solid colored top band
+    const pct = k => { const v = parseFloat(SITE[k]); return v > 20 && v <= 100 ? v : 0; };
+    if (pct("SEARCH_WIDTH")) root.setProperty("--search-w", pct("SEARCH_WIDTH") + "%");
+    if (pct("SEARCH_WIDTH_PHONE")) root.setProperty("--search-w-phone", pct("SEARCH_WIDTH_PHONE") + "%");
+    if (DATA.map.backdrop) document.body.classList.add("has-backdrop");
   }
 
   // Day / Night: the visitor's own choice is remembered; otherwise it follows the phone's setting.
@@ -211,8 +226,10 @@
   function setNight(on) {
     NIGHT = on; store.set("theme", on ? "night" : "day");
     document.documentElement.dataset.theme = on ? "night" : "day";
-    renderControls(); setBaseStyle(STYLE_MODE, true);
+    renderControls(); setBaseStyle(STYLE_MODE, true); syncTone();
   }
+  // Map Tone only colors the standard street map in Day Mode
+  function syncTone() { document.body.classList.toggle("tone-on", STYLE_MODE === "standard" && !NIGHT && !!document.body.dataset.tone); }
 
   // The badge at the start of the search bar: an uploaded logo, initials, an icon, or the area's own outline.
   function outlineRings() {
@@ -267,7 +284,7 @@
   }
 
   /* ---------- 4. The map and its background styles ---------- */
-  let map = null;
+  let map = null, MAP_LOADED = false;
   let STYLE_MODE = store.get("mapstyle", "standard");
   const IN_US = () => { const c = map ? map.getCenter() : null; return !!c && c.lat > 17 && c.lat < 72 && c.lng > -180 && c.lng < -64; };
 
@@ -282,6 +299,8 @@
   const USGS = n => "https://basemap.nationalmap.gov/arcgis/rest/services/" + n + "/MapServer/tile/{z}/{y}/{x}";
   const USGS_CREDIT = "U.S. Geological Survey, National Geospatial Program";
   function styleFor(mode) {
+    const bd = DATA.map && DATA.map.backdrop;
+    if (bd) return { version: 8, sources: {}, layers: [{ id: "ets-bg", type: "background", paint: { "background-color": bd.background || "#FFFFFF" } }] };   // an indoor plan: no street tiles at all
     if (mode === "topo") return rasterStyle([{ url: USGS("USGSTopo"), maxzoom: 16, credit: USGS_CREDIT }]);
     if (mode === "aerial") {
       const src = [{ url: USGS("USGSImageryOnly"), maxzoom: 16, credit: USGS_CREDIT }];
@@ -297,6 +316,7 @@
     if (!map || key === currentStyleKey) return;
     currentStyleKey = key;
     map.setStyle(styleFor(mode), { diff: false });
+    syncTone();
   }
 
   const STYLE_HOOKS = [];
@@ -357,6 +377,7 @@
     const zp = (SITE.ZOOM_POS || "").toLowerCase();
     if (zp !== "off" && zp !== "none") map.addControl(new maplibregl.NavigationControl({ showCompass: false }), zp === "bottom" ? "bottom-right" : "top-right");
     map.on("style.load", addOverlayLayers);
+    map.once("load", () => { MAP_LOADED = true; });
     map.on("error", e => { if (e && e.error && /tiles|style/i.test(String(e.error.message))) warn("Map background: " + e.error.message); });
     map.on("zoomend", refreshMarkerVisibility);
     map.on("movestart", e => { if (e && e.originalEvent && GROUP_VIEW) GROUP_VIEW.moved = true; });   // the visitor moved it themselves
@@ -367,9 +388,11 @@
     });
   }
   // The start view: the saved center and zoom, or else everything on the map, or else the area outline.
+  let HOME_OVERRIDE = null;   // a feature (an indoor plan) can say where "home" is
   function goHome(animate) {
     if (!map) return;
     const dur = animate && !REDUCED ? 700 : 0;
+    if (HOME_OVERRIDE) { HOME_OVERRIDE(dur); return; }
     const lat = parseFloat(SITE.CENTER_LAT), lng = parseFloat(SITE.CENTER_LNG), z = parseFloat(SITE.ZOOM);
     const pts = DATA.items.filter(i => i.hasPos && !i.PART_OF).map(i => [i.lng, i.lat]);
     if (yes(SITE.FIT_TO_MARKERS, true) && pts.length > 1) { map.fitBounds(boundsOf(pts), { padding: 70, maxZoom: 16, duration: dur }); return; }
@@ -413,6 +436,7 @@
   function iconKeyFor(it) { const c = DATA.cats.get(it.CATEGORY); return it.ICON || (c && c.ICON) || ""; }
 
   const MARKERS = new Map();     // item ID -> { marker, el }
+  const FILTERS = [];            // extra rules from feature files (which floor of a building is showing)
   let OPEN_GROUP = null;
   let HIDDEN = new Set(store.get("hidden_cats", []));
 
@@ -427,16 +451,54 @@
     const clip = clipFor(shapeCode);
     const key = iconKeyFor(it);
     let inner;
-    if (FIXED[it.kind] && !it.ICON) inner = '<svg viewBox="0 0 24 24" aria-hidden="true">' + GLYPHS[FIXED[it.kind].glyph] + "</svg>";
+    const photo = photoMarkerFor(it);
+    const fill = fillFor(cat, color);
+    if (photo) inner = '<img class="mk-photo" src="' + esc(photo) + '" alt="" loading="lazy">';
+    else if (fill && !FIXED[it.kind] && !it.ICON) inner = "";
+    else if (FIXED[it.kind] && !it.ICON) inner = '<svg viewBox="0 0 24 24" aria-hidden="true">' + GLYPHS[FIXED[it.kind].glyph] + "</svg>";
     else if (key && DATA.icons.icons[key]) inner = '<img src="' + iconDataUrl(key, 64) + '" alt="">';
     else inner = '<svg viewBox="0 0 24 24" aria-hidden="true">' + GLYPHS.pin + "</svg>";
     const effect = String(it.EFFECT || "").toLowerCase();
     el.innerHTML =
       (it.members.length ? '<span class="mk-stack" style="background:' + esc(color) + (clip ? ";clip-path:" + clip : "") + '"></span>' : "") +
-      '<span class="mk-face' + (effect && effect !== "none" && !REDUCED ? " fx-" + esc(effect) : "") + '" style="background:' + esc(color) + (clip ? ";clip-path:" + clip : "") + '">' + inner + "</span>" +
+      '<span class="mk-face' + (photo ? " has-photo" : "") + (effect && effect !== "none" && !REDUCED ? " fx-" + esc(effect) : "") + '" style="background:' + (photo ? esc(color) : fill ? "url(&quot;" + esc(fill) + "&quot;) center/cover, " + esc(color) : esc(color)) + ";--ring:" + esc(color) + (clip ? ";clip-path:" + clip : "") + '">' + inner + "</span>" +
       (it.members.length ? '<span class="mk-count">' + it.members.length + "</span>" : "");
     el.addEventListener("click", ev => { ev.stopPropagation(); onMarkerTap(it); });
+    const pimg = el.querySelector(".mk-photo");                      // photo missing: fall back to the category icon
+    if (pimg) pimg.addEventListener("error", () => { const k = iconKeyFor(it); pimg.closest(".mk-face").classList.remove("has-photo"); pimg.outerHTML = k && DATA.icons.icons[k] ? '<img src="' + iconDataUrl(k, 64) + '" alt="">' : '<svg viewBox="0 0 24 24" aria-hidden="true">' + GLYPHS.pin + "</svg>"; }, { once: true });
     return el;
+  }
+  // A place's first photo becomes its marker (its small thumbnail when there is one), unless the site turns photo markers off.
+  function photoMarkerFor(it) {
+    if (!yes(SITE.PHOTO_MARKERS, true) || it.kind !== "place" || it.ICON) return "";
+    const p = photoRows(it)[0];
+    return p ? mediaUrl(p.THUMB || p.FILE) : "";
+  }
+  // A category's color or pattern fill, shown instead of an icon when a place has no photo (FILL, FILL_COLOR, FILL_COLOR2)
+  const PATTERNS = ["solid", "stripes", "lines", "diagonal", "checks", "dots", "grid", "waves", "zigzag", "crosses"];
+  const hexOk = c => /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(c || "").trim());
+  function fillFor(cat, outline) {
+    const p = String((cat && cat.FILL) || "").trim().toLowerCase();
+    if (!PATTERNS.includes(p)) return "";
+    const base = hexToRgb(outline) || [228, 115, 3];
+    const c1 = hexOk(cat.FILL_COLOR) ? cat.FILL_COLOR.trim() : rgbHex(mix(base, [255, 255, 255], 0.78)), c2 = hexOk(cat.FILL_COLOR2) ? cat.FILL_COLOR2.trim() : rgbHex(base);
+    return fillUrl(p, c1, c2);
+  }
+  const rgbHex = a => "#" + a.map(x => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, "0")).join("");
+  function fillUrl(pattern, c1, c2) {
+    const t = 25, h = t / 2;
+    const body = {
+      stripes: '<rect width="' + h + '" height="' + t + '" fill="' + c2 + '"/>', diagonal: '<rect width="' + h + '" height="' + t + '" fill="' + c2 + '"/>',
+      lines: '<rect width="' + t + '" height="' + h + '" fill="' + c2 + '"/>',
+      checks: '<rect width="' + h + '" height="' + h + '" fill="' + c2 + '"/><rect x="' + h + '" y="' + h + '" width="' + h + '" height="' + h + '" fill="' + c2 + '"/>',
+      dots: '<circle cx="' + h + '" cy="' + h + '" r="' + (t * 0.22) + '" fill="' + c2 + '"/>',
+      grid: '<rect width="' + t + '" height="3" fill="' + c2 + '"/><rect width="3" height="' + t + '" fill="' + c2 + '"/>',
+      waves: '<path d="M0 ' + h + " Q" + (t / 4) + " " + (t * 0.1) + " " + h + " " + h + " T" + t + " " + h + '" fill="none" stroke="' + c2 + '" stroke-width="3"/>',
+      zigzag: '<path d="M0 ' + (t * 0.7) + " L" + (t / 4) + " " + (t * 0.3) + " L" + h + " " + (t * 0.7) + " L" + (t * 0.75) + " " + (t * 0.3) + " L" + t + " " + (t * 0.7) + '" fill="none" stroke="' + c2 + '" stroke-width="3"/>',
+      crosses: '<rect x="' + (h - 1.5) + '" y="' + (h - 6) + '" width="3" height="12" fill="' + c2 + '"/><rect x="' + (h - 6) + '" y="' + (h - 1.5) + '" width="12" height="3" fill="' + c2 + '"/>'
+    }[pattern];
+    const def = body ? '<defs><pattern id="p" width="' + t + '" height="' + t + '" patternUnits="userSpaceOnUse"' + (pattern === "diagonal" ? ' patternTransform="rotate(45)"' : "") + ">" + body + "</pattern></defs>" : "";
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">' + def + '<rect width="100" height="100" fill="' + c1 + '"/>' + (body ? '<rect width="100" height="100" fill="url(#p)"/>' : "") + "</svg>");
   }
   function buildMarkers() {
     if (!map) return;
@@ -452,7 +514,7 @@
   function refreshMarkerVisibility() {
     MARKERS.forEach(({ el }, id) => {
       const it = DATA.byId.get(id);
-      let show = !HIDDEN.has(it.CATEGORY || "");
+      let show = !HIDDEN.has(it.CATEGORY || "") && FILTERS.every(f => f(it));
       if (it.PART_OF) { const g = DATA.byId.get(it.PART_OF); show = show && (OPEN_GROUP === g || membersAlwaysShown(g)); }
       el.hidden = !show;
       el.classList.toggle("is-open", it === OPEN_GROUP);
@@ -528,7 +590,9 @@
     clock: '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>',
     place: '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"></path><circle cx="12" cy="9.5" r="2.5"></circle>',
     group: '<path d="M3 21h18M5 10h14M12 3l8 5H4z"></path>',
-    play: '<path d="M7 4l13 8-13 8z"></path>'
+    play: '<path d="M7 4l13 8-13 8z"></path>',
+    door: '<path d="M5 21V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17"></path><path d="M3 21h18"></path><circle cx="14" cy="12.5" r="1"></circle>',
+    memory: '<path d="M4 5h16v11H8l-4 4z"></path><path d="M8 9h8M8 12h5"></path>'
   };
   const svgI = (k, cls) => '<svg class="' + (cls || "i") + '" viewBox="0 0 24 24" aria-hidden="true">' + ICON[k] + "</svg>";
   function paragraphs(t) { return String(t || "").split(/\n\s*\n/).map(p => "<p>" + esc(p).replace(/\n/g, "<br>") + "</p>").join(""); }
@@ -556,7 +620,8 @@
     if (it.OTHER_NAMES) parts.push('<div class="c-aka">' + esc(L("alsoKnown")) + ": " + esc(it.OTHER_NAMES) + "</div>");
 
     const acts = [];
-    if (it.hasPos && yes(SITE.MAPS_LINK, true)) acts.push('<a class="act act-main" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=' + it.lat + "," + it.lng + '">' + svgI("maps") + "<span>" + esc(L("openMaps")) + "</span></a>");
+    if (it.hasPos && yes(SITE.MAPS_LINK, true) && !NO_REAL_PLACE) acts.push('<a class="act act-main" target="_blank" rel="noopener" href="' + esc(mapsUrl(it)) + '">' + svgI("maps") + "<span>" + esc(L("openMaps")) + "</span></a>");
+    if (it.INSIDE && /^[a-z0-9][a-z0-9_-]*$/i.test(it.INSIDE)) acts.push('<a class="act act-main" href="' + esc(insideUrl(it.INSIDE)) + '">' + svgI("door") + "<span>" + esc(L("stepInside")) + "</span></a>");
     if (it.WEBSITE) acts.push('<a class="act" target="_blank" rel="noopener" href="' + esc(safeLink(it.WEBSITE)) + '">' + svgI("web") + "<span>" + esc(L("website")) + "</span></a>");
     if (it.PHONE) acts.push('<a class="act" href="tel:' + esc(it.PHONE.replace(/[^\d+]/g, "")) + '">' + svgI("call") + "<span>" + esc(L("call")) + "</span></a>");
     acts.push('<button class="act" type="button" data-share="' + esc(it.ID) + '">' + svgI("share") + "<span>" + esc(L("share")) + "</span></button>");
@@ -585,11 +650,38 @@
       }).join("") + "</div>");
     }
     if (it.TEXT) parts.push('<div class="c-text">' + paragraphs(it.TEXT) + "</div>");
+    const ser = seriesOf(it);          // stories told in a series: "2 of 5" with the story before and after
+    if (ser) parts.push('<div class="c-series"><div class="cs-head">' + esc(L("series", { name: it.SERIES })) + " · " + esc(L("ofN", { n: ser.i + 1, total: ser.list.length })) + '</div><div class="cs-nav">' +
+      (ser.i > 0 ? '<button type="button" class="act" data-open="' + esc(ser.list[ser.i - 1].ID) + '"><span>‹ ' + esc(ser.list[ser.i - 1].NAME || ser.list[ser.i - 1].ID) + "</span></button>" : "") +
+      (ser.i < ser.list.length - 1 ? '<button type="button" class="act" data-open="' + esc(ser.list[ser.i + 1].ID) + '"><span>' + esc(ser.list[ser.i + 1].NAME || ser.list[ser.i + 1].ID) + " ›</span></button>" : "") + "</div></div>");
     if (it.SOURCE) parts.push('<div class="c-source">' + esc(L("source")) + ": " + esc(it.SOURCE) + "</div>");
     if (it.CREDIT && !photos.length) parts.push('<div class="c-source">' + esc(it.CREDIT) + "</div>");
+    const mem = memoryUrl(it);       // "Do you have a memory? Share it": a form or email address set in site.csv as MEMORY_LINK
+    if (mem) parts.push('<a class="c-memory" target="_blank" rel="noopener" href="' + esc(mem) + '">' + svgI("memory") + "<span>" + esc(L("memory")) + "</span></a>");
     return parts.join("");
   }
   const fmtSecs = s => { s = Math.round(+s || 0); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+  let NO_REAL_PLACE = false;     // true on an indoor plan that isn't tied to the real world: no Open in Maps, no Near Me
+  // Open in Maps: Apple Maps on iPhones and iPads, Google Maps everywhere else. It shows a pin; no route is planned here.
+  function mapsUrl(it) {
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    return ios ? "https://maps.apple.com/?ll=" + it.lat + "," + it.lng + "&q=" + encodeURIComponent(it.NAME || "Place") : "https://www.google.com/maps/search/?api=1&query=" + it.lat + "," + it.lng;
+  }
+  function insideUrl(slug) { const u = new URL(location.href); ["place", "happening", "tour", "embed"].forEach(k => u.searchParams.delete(k)); u.searchParams.set("event", slug.toLowerCase()); return u.toString(); }
+
+  function seriesOf(it) {
+    if (!it.SERIES) return null;
+    const list = DATA.items.filter(x => x.SERIES === it.SERIES).sort((a, b) => (+a.ORDER || 999) - (+b.ORDER || 999) || String(a.NAME).localeCompare(String(b.NAME)));
+    return list.length > 1 ? { list, i: list.indexOf(it) } : null;
+  }
+  function memoryUrl(it) {
+    let u = String(it.MEMORY_LINK || SITE.MEMORY_LINK || "").trim();
+    if (!u || /^no$/i.test(u)) return "";
+    const fill = v => encodeURIComponent(v || "");
+    u = u.split("{ID}").join(fill(it.ID)).split("{NAME}").join(fill(it.NAME));
+    if (/^[^@\s/]+@[^@\s]+$/.test(u)) return "mailto:" + u + "?subject=" + fill("Memory: " + (it.NAME || it.ID));
+    return safeLink(u);
+  }
 
   function wireCard(it) {
     const body = $("sheetBody");
@@ -620,6 +712,7 @@
         const i = Math.round(gal.scrollLeft / Math.max(1, gal.clientWidth));
         counter.textContent = (i + 1) + " / " + gal.dataset.count;
       }, { passive: true });
+      gal.querySelectorAll("img").forEach((im, i) => im.addEventListener("click", () => openLightbox(photoRows(it), i, it)));
       const first = gal.querySelector("img");
       first.addEventListener("error", () => { first.closest("figure").classList.add("missing"); warn("Photo not found: " + first.getAttribute("src")); }, { once: true });
       if (first.dataset.anim && !REDUCED) {                // an animated photo plays once, then rests on the still
@@ -631,15 +724,44 @@
     }
   }
 
-  function openCard(it) {
+  function openCard(it, how) {
     if (HL && !HL.has(it.ID)) highlight(null);
     SHEET.item = it;
     const body = $("sheetBody");
     body.innerHTML = cardHtml(it);
     body.scrollTop = 0;
     wireCard(it);
+    document.dispatchEvent(new CustomEvent("ets:open", { detail: { item: it, how: how || "view" } }));  // the passport listens for this
+    document.dispatchEvent(new CustomEvent("ets:card", { detail: { item: it, body } }));          // feature files add their own lines (distance, check-in)
     setSheet(desktop() ? "open" : "peek");
     setUrl({ place: it.ID });
+  }
+
+  // The photo viewer: full screen, swipe or use the arrows, Escape or tap the X to close
+  function openLightbox(rows, start, it) {
+    if (!rows.length) return;
+    let i = start || 0;
+    const box = document.createElement("div"); box.className = "lightbox"; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true"); box.tabIndex = -1;
+    const draw = () => {
+      const r = rows[i];
+      box.innerHTML = '<button type="button" class="lb-close" aria-label="' + esc(L("close")) + '"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>' +
+        '<figure><img src="' + esc(mediaUrl(r.FILE)) + '" alt="' + esc(r.CAPTION || (it && it.NAME) || "") + '">' +
+        "<figcaption>" + (rows.length > 1 ? '<span class="lb-n">' + esc(L("photoOf", { n: i + 1, total: rows.length })) + "</span>" : "") + esc(r.CAPTION || "") + (r.CREDIT ? ' <span class="credit">' + esc(L("credit")) + ": " + esc(r.CREDIT) + "</span>" : "") + "</figcaption></figure>" +
+        (rows.length > 1 ? '<button type="button" class="lb-prev" aria-label="' + esc(L("prev")) + '"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"></path></svg></button><button type="button" class="lb-next" aria-label="' + esc(L("next")) + '"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg></button>' : "");
+      box.querySelector(".lb-close").onclick = close;
+      const pv = box.querySelector(".lb-prev"), nx = box.querySelector(".lb-next");
+      if (pv) pv.onclick = e => { e.stopPropagation(); go(-1); };
+      if (nx) nx.onclick = e => { e.stopPropagation(); go(1); };
+    };
+    const go = d => { i = (i + d + rows.length) % rows.length; draw(); };
+    const key = e => { if (e.key === "Escape") { e.stopPropagation(); close(); } else if (e.key === "ArrowLeft") go(-1); else if (e.key === "ArrowRight") go(1); };
+    let sx = null;
+    box.addEventListener("pointerdown", e => { sx = e.clientX; });
+    box.addEventListener("pointerup", e => { if (sx != null && Math.abs(e.clientX - sx) > 50 && rows.length > 1) go(e.clientX < sx ? 1 : -1); sx = null; });
+    box.addEventListener("click", e => { if (e.target === box) close(); });
+    function close() { document.removeEventListener("keydown", key, true); box.remove(); }
+    document.addEventListener("keydown", key, true);
+    draw(); document.body.appendChild(box); box.focus();
   }
   function closeSheet() { SHEET.item = null; setSheet("closed"); setUrl({ place: null }); highlight(null); if (SHEET.onClose) { const f = SHEET.onClose; SHEET.onClose = null; f(); } }
   // Show any content in the card (used by feature files such as Happenings)
@@ -702,7 +824,7 @@
   // Zones (top row, second row, left and right stacks, bottom row, More menu) are set in site.csv
   // with LAYOUT_TOP, LAYOUT_TOP2, LAYOUT_LEFT, LAYOUT_RIGHT, LAYOUT_BOTTOM and LAYOUT_MORE.
   const OLD_NAMES = { chips: "categories", event: "about", tour: "tours", newrow: "" };
-  const DEFAULT_LAYOUT = { TOP: "search,daynight", TOP2: "categories", TOP3: "happenings,spacer,tours", LEFT: "", RIGHT: "mapstyle,home,more", BOTTOM: "", MORE: "share,about" };
+  const DEFAULT_LAYOUT = { TOP: "search,daynight", TOP2: "categories", TOP3: "happenings,tours", LEFT: "", RIGHT: "near,passport,mapstyle,home,more", BOTTOM: "", MORE: "share,legend,offline,about" };
   function zoneList(z) {
     let v = SITE["LAYOUT_" + z];
     if (z === "RIGHT" && !v && SITE.LAYOUT_FLOAT) v = SITE.LAYOUT_FLOAT;
@@ -714,7 +836,7 @@
   RENDER.search = () => {
     const wrap = document.createElement("div");
     wrap.className = "ctl-search";
-    const place = (SITE.PLACE || "").trim();
+    const place = ((SITE.HEADER || "").split("{PLACE}").join(SITE.PLACE || "") || SITE.PLACE || "").trim();
     wrap.innerHTML =
       '<button type="button" class="badge" aria-label="' + esc(L("about")) + '">' + badgeHtml() + "</button>" +
       '<label class="s-field">' + (place ? '<span class="s-place">' + esc(place.toUpperCase()) + "</span>" : "") +
@@ -733,8 +855,8 @@
   RENDER.daynight = () => roundBtn(NIGHT ? L("dayMode") : L("nightMode"), NIGHT
     ? '<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>'
     : '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path>', () => setNight(!NIGHT), "daynight");
-  RENDER.mapstyle = () => roundBtn(L("mapStyle"), '<path d="M12 3l9 5-9 5-9-5z"></path><path d="M3 13l9 5 9-5"></path>', e => openMapStyleMenu(e.currentTarget));
-  RENDER.aerial = () => roundBtn(L("aerial"), '<circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path>', () => { setBaseStyle(STYLE_MODE === "aerial" ? "standard" : "aerial"); store.set("mapstyle", STYLE_MODE); });
+  RENDER.mapstyle = () => DATA.map.backdrop ? null : roundBtn(L("mapStyle"), '<path d="M12 3l9 5-9 5-9-5z"></path><path d="M3 13l9 5 9-5"></path>', e => openMapStyleMenu(e.currentTarget));
+  RENDER.aerial = () => !yes(SITE.AERIAL_BUTTON, true) ? null : roundBtn(L("aerial"), '<circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path>', () => { setBaseStyle(STYLE_MODE === "aerial" ? "standard" : "aerial"); store.set("mapstyle", STYLE_MODE); });
   RENDER.more = () => { const items = zoneList("MORE").filter(n => MENU_ITEMS[n] && MENU_ITEMS[n].show()); return items.length ? roundBtn(L("more"), '<circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle>', e => openMoreMenu(e.currentTarget, items)) : null; };
   RENDER.home = () => roundBtn(L("home"), '<path d="M4 11l8-7 8 7"></path><path d="M6 10v10h12V10"></path>', () => { closeMenus(); if (SHEET.state !== "closed") closeSheet(); OPEN_GROUP = null; GROUP_VIEW = null; refreshMarkerVisibility(); goHome(true); });
   RENDER.share = () => roundBtn(L("shareMap"), ICON.share, () => shareLink(null));
@@ -757,10 +879,17 @@
     });
     return row;
   };
+  RENDER.legend = () => {
+    const cats = [...DATA.cats.values()].filter(c => DATA.items.some(i => i.CATEGORY === c.CODE));
+    const kinds = ["photospot", "story"].filter(k => DATA.items.some(i => i.kind === k));
+    if (!cats.length && !kinds.length) return null;
+    return roundBtn(L("legend"), '<path d="M8 6h12M8 12h12M8 18h12"></path><circle cx="4" cy="6" r="1.3"></circle><circle cx="4" cy="12" r="1.3"></circle><circle cx="4" cy="18" r="1.3"></circle>', e => openLegend(e.currentTarget, cats, kinds));
+  };
+  RENDER.offline = () => null;     // lives in the More menu
   RENDER.eventbanner = () => {        // which event map this is, with an obvious way back to the main map
     const wrap = document.createElement("div"); wrap.className = "ev-banner";
     const u = new URL(location.href); u.searchParams.delete("event"); u.searchParams.delete("place"); u.searchParams.delete("happening");
-    wrap.innerHTML = '<span class="ev-label">' + esc(L("eventMap")) + '</span><span class="ev-title">' + esc(EVENT.title) + "</span>" +
+    wrap.innerHTML = '<span class="ev-label">' + esc(EVENT.kind === "interior" ? L("inside") : L("eventMap")) + '</span><span class="ev-title">' + esc(EVENT.title) + "</span>" +
       '<a class="ev-close" href="' + esc(u.toString()) + '" aria-label="' + esc(L("exitEvent")) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg><span>' + esc(L("exitShort")) + "</span></a>";
     return wrap;
   };
@@ -772,8 +901,16 @@
     categories: { show: () => DATA.cats.size > 1, label: () => L("categories"), run: () => openCategoryMenu($("zoneRight"), [...DATA.cats.values()]) },
     mapstyle: { show: () => true, label: () => L("mapStyle"), run: () => openMapStyleMenu($("zoneRight")) },
     home: { show: () => true, label: () => L("home"), run: () => RENDER.home().click() },
-    daynight: { show: () => true, label: () => NIGHT ? L("dayMode") : L("nightMode"), run: () => setNight(!NIGHT) }
+    daynight: { show: () => true, label: () => NIGHT ? L("dayMode") : L("nightMode"), run: () => setNight(!NIGHT) },
+    legend: { show: () => DATA.cats.size > 0, label: () => L("legend"), run: () => openLegend($("zoneRight"), [...DATA.cats.values()].filter(c => DATA.items.some(i => i.CATEGORY === c.CODE)), ["photospot", "story"].filter(k => DATA.items.some(i => i.kind === k))) },
+    offline: { show: () => "serviceWorker" in navigator && !EMBED && location.protocol !== "file:", label: () => L("saveOffline"), run: () => loadFeature("offline").then(() => window.ETSOffline && window.ETSOffline.open()) }
   };
+  function openLegend(anchor, cats, kinds) {
+    const sw = (color, shape, key, glyph) => { const clip = clipFor(shape); return '<span class="lg-mk" style="background:' + esc(color) + (clip ? ";clip-path:" + clip : "") + '">' + (glyph ? '<svg viewBox="0 0 24 24">' + GLYPHS[glyph] + "</svg>" : key && DATA.icons.icons[key] ? '<img src="' + iconDataUrl(key, 40) + '" alt="">' : "") + "</span>"; };
+    showMenu(anchor, () => '<div class="menu-title">' + esc(L("legend")) + "</div>" +
+      cats.map(c => '<div class="menu-item lg-row">' + sw(c.COLOR || "#888", c.SHAPE, c.ICON) + esc(c.LABEL || c.CODE) + "</div>").join("") +
+      kinds.map(k => '<div class="menu-item lg-row">' + sw(FIXED[k].color, "", "", FIXED[k].glyph) + esc(k === "story" ? L("story") : L("photoSpot")) + "</div>").join(""), () => {});
+  }
 
   function roundBtn(label, path, onClick, extra) {
     const b = document.createElement("button"); b.type = "button"; b.className = "round" + (extra ? " round-" + extra : "");
@@ -800,6 +937,7 @@
       while (box.lastElementChild && box.lastElementChild.classList.contains("spacer")) box.lastElementChild.remove();
       box.hidden = !box.children.length;
     });
+    $("zoneBottom").classList.toggle("phone-only", String(SITE.BOTTOM_ON || "").toLowerCase() !== "all");
     if (!placed.has("search")) $("zoneTop").prepend(RENDER.search("TOP"));   // the badge and search are always reachable
     $("zoneTop").hidden = false;
   }
@@ -826,7 +964,7 @@
   }
   function openMapStyleMenu(anchor) {
     const us = IN_US() || !map;
-    const opts = [["standard", L("standard"), true], ["topo", L("topo"), us], ["aerial", L("aerial"), us || !!SITE.LOCAL_IMAGERY_URL]];
+    const opts = [["standard", L("standard"), true], ["topo", L("topo"), us], ["aerial", L("aerial"), us || !!SITE.LOCAL_IMAGERY_URL]].filter(o => o[0] !== "aerial" || yes(SITE.AERIAL_BUTTON, true));
     showMenu(anchor, () => '<div class="menu-title">' + esc(L("mapStyle")) + "</div>" + opts.map(([k, lab, ok]) =>
       '<button type="button" class="menu-item' + (STYLE_MODE === k ? " on" : "") + '" data-k="' + k + '"' + (ok ? "" : ' disabled title="' + esc(L("usOnly")) + '"') + ">" + esc(lab) + (STYLE_MODE === k ? '<span class="tick">✓</span>' : "") + "</button>").join(""),
       pop => pop.querySelectorAll("[data-k]").forEach(b => b.addEventListener("click", () => { setBaseStyle(b.dataset.k); store.set("mapstyle", b.dataset.k); closeMenus(); })));
@@ -868,7 +1006,7 @@
     box.style.left = r.left + "px"; box.style.top = (r.bottom + 8) + "px"; box.style.width = Math.max(260, r.width) + "px";
     box.hidden = false;
   }
-  function goTo(it) {
+  function goTo(it, how) {
     if (!it) return;
     if (it.CATEGORY && HIDDEN.has(it.CATEGORY)) { HIDDEN.delete(it.CATEGORY); saveHidden(); }
     if (it.PART_OF) OPEN_GROUP = DATA.byId.get(it.PART_OF);
@@ -876,7 +1014,8 @@
     else OPEN_GROUP = null;
     refreshMarkerVisibility();
     if (map && it.hasPos) map.easeTo({ center: [it.lng, it.lat], zoom: Math.max(map.getZoom(), 16), padding: { bottom: sheetPad(), top: 120, left: desktop() ? 420 : 0, right: 0 }, duration: REDUCED ? 0 : 700 });
-    openCard(it);
+    document.dispatchEvent(new CustomEvent("ets:goto", { detail: { item: it } }));   // an indoor plan switches to the item's floor
+    openCard(it, how);
   }
 
   // About panel (the "Event" or focus button)
@@ -926,14 +1065,19 @@
     onStyle(f) { STYLE_HOOKS.push(f); if (map && map.isStyleLoaded && map.isStyleLoaded()) { try { f(map); } catch (e) { warn(e.message); } } },
     setPeek(px) { const sh = $("sheet"); if (px) sh.style.setProperty("--sheet-peek", px + "px"); else sh.style.removeProperty("--sheet-peek"); },
     setTouring(on) { document.body.classList.toggle("touring", !!on); if (on) { closeMenus(); OPEN_GROUP = null; refreshMarkerVisibility(); } },
-    openCard, closeMenus, boundsOf, sheetPad, desktop,
+    openCard, closeMenus, boundsOf, sheetPad, desktop, getCSV, getJSON, dataUrl, iconDataUrl, clipFor, GLYPHS, FIXED, ICON, openLightbox, loadFeature: n => loadFeature(n),
+    addFilter(f) { FILTERS.push(f); }, refreshMarkers: () => refreshMarkerVisibility(), markerEl: id => (MARKERS.get(id) || {}).el,
+    setHome(f) { HOME_OVERRIDE = f; }, goHome: a => goHome(a), set noRealPlace(v) { NO_REAL_PLACE = !!v; }, get noRealPlace() { return NO_REAL_PLACE; },
+    EMBED, SAFE, DEBUG, get NIGHT() { return NIGHT; }, get styleMode() { return STYLE_MODE; }, groupOf: it => it.PART_OF ? DATA.byId.get(it.PART_OF) : null,
+    get openItem() { return SHEET.item; }, fixed: k => FIXED[k],
     fitTo(ids) { const pts = ids.map(id => DATA.byId.get(id)).filter(i => i && i.hasPos).map(i => [i.lng, i.lat]);
       if (!map || !pts.length) return;
       if (pts.length === 1) map.easeTo({ center: pts[0], zoom: Math.max(map.getZoom(), 15), padding: { bottom: sheetPad(), top: 120, left: desktop() ? 420 : 0, right: 0 }, duration: REDUCED ? 0 : 600 });
       else map.fitBounds(boundsOf(pts), { padding: { top: 150, bottom: sheetPad(), left: desktop() ? 460 : 60, right: 60 }, maxZoom: 16, duration: REDUCED ? 0 : 600 }); }
   };
   const STARTERS = [];
-  API.onStart = f => STARTERS.push(f);     // runs once the map is ready
+  let STARTED = false;
+  API.onStart = f => { if (STARTED) { try { f(); } catch (e) { warn(e.message); } } else STARTERS.push(f); };     // runs once the map is ready
   window.ETSCore = API;
   function loadFeature(name) {
     return new Promise(res => {
@@ -949,30 +1093,42 @@
     await loadAll();
     applyLook();
     makeMap();
-    if (DATA.happenings.length) await loadFeature("happenings");
-    if (DATA.routes.length) await loadFeature("tours");
+    // Extras load only when the site has something for them (and never in safe mode)
+    if (!SAFE) {
+      if (DATA.map.backdrop) await loadFeature("interiors");
+      if (DATA.happenings.length) await loadFeature("happenings");
+      if (DATA.routes.length) await loadFeature("tours");
+      if ((DATA.map.overlays || []).length && yes(SITE.OVERLAY_SLIDER, true)) await loadFeature("oldmaps");
+      if (!NO_REAL_PLACE && yes(SITE.NEAR_ME, true)) await loadFeature("nearme");
+      if (yes(SITE.PASSPORT, false) && !EMBED) await loadFeature("passport");
+    }
     renderControls();
     wireSheet();
     buildMarkers();
     document.addEventListener("click", e => {
       if (!e.target.closest(".pop, .ctl-search, .round, .pill")) closeMenus();
     });
-    // Deep links: ?place=ID (older links used ?spot= or ?site=), ?cat=CODE shows only that category
+    // Deep links: ?place=ID (older links used ?spot= or ?site=), ?cat=CODE shows only that category.
+    // ?site= (the old QR signs) and &qr=1 count as scanning the place's QR sign.
     const want = Q.get("place") || Q.get("spot") || Q.get("site");
+    const viaQR = !!Q.get("site") || Q.get("qr") === "1";
     const cat = Q.get("cat");
     if (cat && DATA.cats.has(cat)) { HIDDEN = new Set([...DATA.cats.keys()].filter(c => c !== cat)); refreshMarkerVisibility(); renderControls(); }
     const target = want && DATA.byId.get(want);
     if (want && !target) warn("The link asked for " + want + ", which isn't on this map.");
     const go = () => {
-      const deep = !!target || !!Q.get("happening");
+      const deep = !!target || !!Q.get("happening") || !!Q.get("tour");
       fitStart(deep);
-      if (target) goTo(target); else if (!DATA.items.length && !DATA.happenings.length) openAbout();
-      STARTERS.forEach(f => { try { f(); } catch (e) { warn(e.message); } });
+      if (target) goTo(target, viaQR ? "qr" : "view"); else if (!DATA.items.length && !DATA.happenings.length) openAbout();
+      STARTED = true; STARTERS.splice(0).forEach(f => { try { f(); } catch (e) { warn(e.message); } });
+      // the welcome screen: skipped in embeds, safe mode, and for visitors who arrive by a QR code or a shared link
+      if (!SAFE && !EMBED && Q.get("intro") !== "0" && (Q.get("intro") === "1" || (!deep && !Q.get("event") && yes(SITE.WELCOME, true) && DATA.items.length))) loadFeature("welcome");
     };
-    if (map) map.once("load", () => {
+    const ready = () => {
       if (STYLE_MODE !== "standard" && !IN_US() && !(STYLE_MODE === "aerial" && SITE.LOCAL_IMAGERY_URL)) setBaseStyle("standard");
       go();
-    });
+    };
+    if (map) { if (MAP_LOADED) ready(); else map.once("load", ready); }     // the map may already have loaded while the extras were fetched
     else go();
     if (EVENT) document.body.dataset.event = EVENT.name;
     if (DEBUG) showDebug();

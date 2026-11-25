@@ -13,11 +13,11 @@ BOUNDS_NORTH,
 MIN_ZOOM,
 MAX_ZOOM,
 FIT_TO_MARKERS,yes
-PASSPORT,no
+PASSPORT,yes
 PASSPORT_RANKS,yes
 PRIZES,yes
 YEAR_SLIDER,no
-OVERLAY_SLIDER,no
+OVERLAY_SLIDER,yes
 AERIAL_BUTTON,yes
 MAPS_LINK,yes
 LAYOUT_STYLE,
@@ -26,7 +26,7 @@ EVENT_TITLE,About This Sample
 EVENT_TEXT,"This is made-up sample data for testing the map. None of these places are real.
 
 Tap a place to open its card. Drag the triangle up for more, or down to close it."
-WELCOME_THEME,
+WELCOME_THEME,fall
 WELCOME_TEXT,Welcome to|{PLACE}
 BAR_STYLE,
 SEARCH_WIDTH,50
@@ -37,22 +37,22 @@ PASSPORT_STYLE,ring
 RING_COLOR,#F59E0B
 RING_TRACK,#C0C0C0
 RING_TEXT,#0B7A75
-INTRO_STYLE,spin
+INTRO_STYLE,zoom
 INTRO_FEATURES,mixed
 INTRO_CARD,
 FONT_BODY,
 FONT_HEAD,
 LAYOUT_TOP,"search,daynight"
-LAYOUT_MORE,"share,about"
+LAYOUT_MORE,"share,legend,offline,about"
 LAYOUT_OFF,
 LAYOUT_BOTTOM,
 LAYOUT_FLOAT,
 ZOOM_POS,top
-PASSPORT_GRAND_RANK,
+PASSPORT_GRAND_RANK,Sample Town Expert
 TIME_ZONE,
 LAYOUT_TOP2,categories
-LAYOUT_TOP3,"happenings,spacer,tours"
-LAYOUT_RIGHT,"near,mapstyle,home,more"
+LAYOUT_TOP3,"happenings,tours"
+LAYOUT_RIGHT,"near,passport,oldmaps,mapstyle,home,more"
 LAYOUT_LEFT,
 CATEGORY_STYLE,chips
 BADGE,
@@ -65,3 +65,8 @@ SHOW_MEMBERS,tap
 LOCAL_IMAGERY_URL,
 LOCAL_IMAGERY_CREDIT,
 LOCAL_IMAGERY_MINZOOM,
+MEMORY_LINK,memories@example.com
+NEAR_ME,yes
+UNITS,mi
+WELCOME,yes
+PHOTO_MARKERS,yes

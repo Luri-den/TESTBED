@@ -1,1 +1,7 @@
-ITEM_ID,ORDER,KIND,FILE,CAPTION,CREDIT,TRANSCRIPT,SECONDS,ANIMATION
+ITEM_ID,ORDER,KIND,FILE,THUMB,CAPTION,CREDIT,TRANSCRIPT,SECONDS,ANIMATION
+SAMPLE-01-01,1,photo,courthouse.jpg,thumbs/courthouse.jpg,The courthouse on a sunny day (sample),Sample Archive,,,
+SAMPLE-01-01,2,photo,courthouse-2.jpg,thumbs/courthouse-2.jpg,The courthouse at sunset (sample),Sample Archive,,,
+SAMPLE-03,1,photo,diner.jpg,thumbs/diner.jpg,The diner (sample),,,,
+SAMPLE-04,1,photo,mill.jpg,thumbs/mill.jpg,The view from the overlook (sample),,,,
+SAMPLE-01-02,1,photo,market.jpg,thumbs/market.jpg,Market day (sample),,,,
+SAMPLE-05,1,video,https://youtu.be/dQw4w9WgXcQ,,A sample video link,,"A sample transcript, shown under the player.",,
