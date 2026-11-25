@@ -10,7 +10,7 @@
   C.words({ oldMaps: "Old Maps", oldMapsShow: "Show an Old Map", oldMapsHide: "Hide the Old Map", seeThrough: "See-Through", loadingMap: "Loading the old map…", pickMap: "Which old map" });
 
   const okCorners = c => Array.isArray(c) && c.length === 4 && c.every(p => Array.isArray(p) && isFinite(+p[0]) && isFinite(+p[1]));
-  const MAPS = (C.DATA.map.overlays || []).filter(o => {
+  const MAPS = (C.DATA.map.overlays || []).filter(o => o && o.hidden !== true).filter(o => {
     if (o && o.file && okCorners(o.corners)) return true;
     C.warn("An old map in map.json (" + ((o && (o.name || o.file)) || "no name") + ") is missing its picture or its four corners, so it's skipped.");
     return false;

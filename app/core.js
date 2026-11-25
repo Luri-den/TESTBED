@@ -20,6 +20,10 @@
   const EMBED = Q.get("embed") === "1";
   const SAFE = Q.get("safe") === "1";
   const DEBUG = Q.get("debug") === "1";
+  // ?draft=1 is the editor's Preview: unpublished changes are read from this browser instead of the website
+  const DRAFT = Q.get("draft") === "1";
+  const draftText = path => { try { return localStorage.getItem("ets_draft:" + path); } catch (e) { return null; } };
+  const draftMedia = file => { try { const ed = window.opener && window.opener.ETSEditor; return ed && ed.pendingUrl ? ed.pendingUrl(file) : ""; } catch (e) { return ""; } };
   const REDUCED = SAFE || matchMedia("(prefers-reduced-motion: reduce)").matches;
   const $ = id => document.getElementById(id);
   const problems = [];
@@ -70,11 +74,13 @@
   }
   function mediaUrl(file) {
     if (!file) return "";
-    if (/^(https?:)?\/\//i.test(file) || file.startsWith("data:")) return file;
+    if (/^(https?:)?\/\//i.test(file) || file.startsWith("data:") || file.startsWith("blob:")) return file;
+    if (DRAFT) { const d = draftMedia(file); if (d) return d; }
     if (EVENT && EVENT.media && EVENT.media.has(file)) return BASE + "events/" + EVENT.name + "/media/" + file;
     return BASE + "media/" + file;
   }
   async function getText(url) {
+    if (DRAFT) { const d = draftText(url); if (d != null) return d; }
     try {
       const r = await fetch(url, { cache: "no-cache" });
       if (!r.ok) { if (r.status !== 404) warn(url + " could not be read (" + r.status + ")."); return null; }

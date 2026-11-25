@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Map Editor</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<link rel="stylesheet" href="app/editor.css">
+</head>
+<body>
+<!--
+  ETS Community Map: the editor. One page, one map, six panels.
+  It only ever changes the files in data/ (and media/), never the code.
+  Changes are kept in this browser until you press Publish.
+  ?event=NAME designs an event or interior folder instead of the main map. ?sample=demo opens the sample.
+-->
+<header class="ed-top">
+  <button type="button" class="ed-brand" id="edBrand" aria-label="About this map"><span class="ed-badge" id="edBadge"></span><b id="edName">Map Editor</b></button>
+  <nav class="ed-tabs" id="edTabs" aria-label="Panels"></nav>
+  <span class="ed-grow"></span>
+  <span class="ed-saved" id="edSaved" hidden></span>
+  <a class="ed-btn" href="tools.html" title="QR signs, icons, marker shapes and the Building Designer">Tools</a>
+  <button type="button" class="ed-btn" id="edUndo" disabled title="Undo the last change">Undo</button>
+  <button type="button" class="ed-btn" id="edPreview">Preview</button>
+  <button type="button" class="ed-btn ed-primary" id="edPublish">Publish <span class="ed-count" id="edCount" hidden>0</span></button>
+</header>
+<div class="ed-event" id="edEvent" hidden></div>
+<main class="ed-main">
+  <aside class="ed-side" id="edSide" aria-label="Panel"></aside>
+  <section class="ed-mapwrap">
+    <div id="edMap" class="ed-map"></div>
+    <div class="ed-mode" id="edMode" hidden></div>
+    <div class="ed-mapbtns">
+      <button type="button" class="ed-round" id="edAerial" title="Switch between the street map and aerial photos">Aerial</button>
+    </div>
+  </section>
+  <aside class="ed-insp" id="edInsp" aria-label="Details" hidden></aside>
+</main>
+<div class="ed-toast" id="edToast" role="status" aria-live="polite" hidden></div>
+<div class="ed-modal-back" id="edModal" hidden></div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="app/ed-core.js"></script>
+<script src="app/ed-items.js"></script>
+<script src="app/ed-tours.js"></script>
+<script src="app/ed-haps.js"></script>
+<script src="app/ed-passport.js"></script>
+<script src="app/ed-look.js"></script>
+<script src="app/ed-map.js"></script>
+<script>ETSEditor.start();</script>
+</body>
+</html>
