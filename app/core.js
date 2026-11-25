@@ -291,6 +291,7 @@
 
   /* ---------- 4. The map and its background styles ---------- */
   let map = null, MAP_LOADED = false;
+  let STYLE_READY = false;   // the background style has arrived, so layers can be added (the map's own isStyleLoaded() stays false while tiles load)
   let STYLE_MODE = store.get("mapstyle", "standard");
   const IN_US = () => { const c = map ? map.getCenter() : null; return !!c && c.lat > 17 && c.lat < 72 && c.lng > -180 && c.lng < -64; };
 
@@ -321,6 +322,7 @@
     const key = mode + (mode === "standard" ? (NIGHT ? "-n" : "-d") : "");
     if (!map || key === currentStyleKey) return;
     currentStyleKey = key;
+    STYLE_READY = false;
     map.setStyle(styleFor(mode), { diff: false });
     syncTone();
   }
@@ -382,7 +384,7 @@
     map.touchZoomRotate && map.touchZoomRotate.disableRotation && map.touchZoomRotate.disableRotation();
     const zp = (SITE.ZOOM_POS || "").toLowerCase();
     if (zp !== "off" && zp !== "none") map.addControl(new maplibregl.NavigationControl({ showCompass: false }), zp === "bottom" ? "bottom-right" : "top-right");
-    map.on("style.load", addOverlayLayers);
+    map.on("style.load", () => { STYLE_READY = true; addOverlayLayers(); });
     map.once("load", () => { MAP_LOADED = true; });
     map.on("error", e => { if (e && e.error && /tiles|style/i.test(String(e.error.message))) warn("Map background: " + e.error.message); });
     map.on("zoomend", refreshMarkerVisibility);
@@ -1068,7 +1070,7 @@
     esc, yes, store, mediaUrl, svgI, colorFor, toast, warn, setUrl, goTo, highlight, renderControls,
     openSheetHtml, closeSheet, setSheet, get sheetState() { return SHEET.state; }, set onSheetClose(f) { SHEET.onClose = f; },
     get map() { return map; },
-    onStyle(f) { STYLE_HOOKS.push(f); if (map && map.isStyleLoaded && map.isStyleLoaded()) { try { f(map); } catch (e) { warn(e.message); } } },
+    onStyle(f) { STYLE_HOOKS.push(f); if (map && STYLE_READY) { try { f(map); } catch (e) { warn(e.message); } } },   // a feature that loads after the style arrived still gets its layers
     setPeek(px) { const sh = $("sheet"); if (px) sh.style.setProperty("--sheet-peek", px + "px"); else sh.style.removeProperty("--sheet-peek"); },
     setTouring(on) { document.body.classList.toggle("touring", !!on); if (on) { closeMenus(); OPEN_GROUP = null; refreshMarkerVisibility(); } },
     openCard, closeMenus, boundsOf, sheetPad, desktop, getCSV, getJSON, dataUrl, iconDataUrl, clipFor, GLYPHS, FIXED, ICON, openLightbox, loadFeature: n => loadFeature(n),

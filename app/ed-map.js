@@ -60,7 +60,7 @@
   const overlayFolder = () => ED.BASE + "overlays/";
   const overlayPath = o => o.file.includes("/") ? ED.BASE + o.file : overlayFolder() + o.file;
   async function drawImages() {
-    const m = ED.map; if (!m || !m.getSource || !(m.isStyleLoaded && m.isStyleLoaded())) return;
+    const m = ED.map; if (!m || !m.getSource || !ED.styleReady()) return;
     const want = [];
     if (ED.current() === "map") {
       const ov = (mapData().overlays || [])[selOverlay];

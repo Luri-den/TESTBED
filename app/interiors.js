@@ -103,7 +103,7 @@
     try { map.setMaxBounds && map.setMaxBounds([[b[0][0] - px, b[0][1] - py], [b[1][0] + px, b[1][1] + py]]); } catch (e) { /* fine */ }
     try { map.setMinZoom && map.setMinZoom(0); map.setMaxZoom && map.setMaxZoom(22); } catch (e) { /* fine */ }
     const go = () => { draw(); home(pendingHome != null ? pendingHome : 0); floorBar(); scaleBar(); C.refreshMarkers(); };
-    if (map.isStyleLoaded && map.isStyleLoaded()) go(); else map.once("load", go);
+    let done = false; C.onStyle(() => { if (!done) { done = true; go(); } });      // runs now if the map's style has arrived, or as soon as it does
   })();
 
   /* ---------- floors ---------- */

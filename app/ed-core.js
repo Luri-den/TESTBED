@@ -250,13 +250,15 @@
   const USGS = n => "https://basemap.nationalmap.gov/arcgis/rest/services/" + n + "/MapServer/tile/{z}/{y}/{x}";
   const styleFor = () => aerial ? { version: 8, sources: { a: { type: "raster", tiles: [USGS("USGSImageryOnly")], tileSize: 256, maxzoom: 16, attribution: "USGS" } }, layers: [{ id: "a", type: "raster", source: "a" }] } : "https://tiles.openfreemap.org/styles/liberty";
   const HOOKS = [];
-  ED.onStyle = f => { HOOKS.push(f); if (map && map.isStyleLoaded && map.isStyleLoaded()) try { f(map); } catch (e) { console.error(e); } };
+  let STYLE_READY = false;
+  ED.styleReady = () => STYLE_READY;
+  ED.onStyle = f => { HOOKS.push(f); if (map && STYLE_READY) try { f(map); } catch (e) { console.error(e); } };
   function makeMap() {
     if (!window.maplibregl) { $("edMap").innerHTML = '<div class="ed-nomap">The map library didn\'t load. Check the connection and reload.</div>'; return; }
     const s = ED.data.site, lat = parseFloat(s.CENTER_LAT), lng = parseFloat(s.CENTER_LNG);
     map = new maplibregl.Map({ container: "edMap", style: styleFor(), center: isFinite(lng) ? [lng, lat] : [-96, 39], zoom: isFinite(lng) ? (parseFloat(s.ZOOM) || 14) : 3.4, attributionControl: { compact: true }, dragRotate: false });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-    map.on("style.load", () => HOOKS.forEach(f => { try { f(map); } catch (e) { console.error(e); } }));
+    map.on("style.load", () => { STYLE_READY = true; HOOKS.forEach(f => { try { f(map); } catch (e) { console.error(e); } }); });
     map.on("click", e => {
       if (!e.originalEvent || e.originalEvent.target !== map.getCanvas()) return;
       if (MODE && MODE.onMapClick) MODE.onMapClick([e.lngLat.lng, e.lngLat.lat], e);
@@ -273,7 +275,7 @@
   ED.fitAll = fitAll;
   function bounds(pts) { let w = 180, s = 90, e = -180, n = -90; pts.forEach(([x, y]) => { w = Math.min(w, x); e = Math.max(e, x); s = Math.min(s, y); n = Math.max(n, y); }); return [[w, s], [e, n]]; }
   ED.bounds = bounds;
-  ED.toggleAerial = () => { aerial = !aerial; $("edAerial").textContent = aerial ? "Street Map" : "Aerial"; if (map) map.setStyle(styleFor()); };
+  ED.toggleAerial = () => { aerial = !aerial; $("edAerial").textContent = aerial ? "Street Map" : "Aerial"; if (map) { STYLE_READY = false; map.setStyle(styleFor()); } };
 
   ED.refreshMarkers = function () {
     if (!map || !window.maplibregl) return;
