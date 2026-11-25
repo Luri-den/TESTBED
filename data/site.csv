@@ -49,7 +49,7 @@ INTRO_CARD,
 FONT_BODY,
 FONT_HEAD,
 LAYOUT_TOP,"search,daynight"
-LAYOUT_MORE,"share,legend,offline,about"
+LAYOUT_MORE,"share,list,legend,offline,about"
 LAYOUT_OFF,
 LAYOUT_BOTTOM,
 LAYOUT_FLOAT,

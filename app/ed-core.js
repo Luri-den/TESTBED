@@ -291,13 +291,14 @@
   ED.refreshMarkers = function () {
     if (!map || !window.maplibregl) return;
     const seen = new Set();
-    const sel = ED.selected, selGroup = sel ? (sel.PART_OF || (ED.data.items.some(x => x.PART_OF === sel.ID) ? sel.ID : "")) : "";
+    const counts = new Map(); ED.data.items.forEach(x => { if (x.PART_OF) counts.set(x.PART_OF, (counts.get(x.PART_OF) || 0) + 1); });   // counted once, not once per marker
+    const sel = ED.selected, selGroup = sel ? (sel.PART_OF || (counts.has(sel.ID) ? sel.ID : "")) : "";
     ED.data.items.forEach(it => {
       const lat = parseFloat(it.LAT), lng = parseFloat(it.LONG);
       if (!it.ID || !isFinite(lat) || !isFinite(lng)) return;
       seen.add(it.ID);
       let m = MARKERS.get(it.ID);
-      const isGroup = ED.data.items.some(x => x.PART_OF === it.ID);
+      const isGroup = counts.has(it.ID);
       const sig = [ED.colorFor(it), it.KIND, isGroup, it.PART_OF, (ED.data.cats.get(it.CATEGORY) || {}).ICON, it.ICON, it.NAME].join("|");
       if (!m || m.sig !== sig) {
         if (m) m.marker.remove();
@@ -305,7 +306,7 @@
         el.setAttribute("aria-label", it.NAME || it.ID); el.title = it.NAME || it.ID;
         const key = it.ICON || (ED.data.cats.get(it.CATEGORY) || {}).ICON;
         const glyph = it.KIND === "story" ? "✦" : it.KIND === "photospot" ? "◉" : "";
-        el.innerHTML = '<span class="edm-face" style="background:' + esc(ED.colorFor(it)) + '">' + (key && ED.iconUrl(key) ? '<img src="' + ED.iconUrl(key, 48) + '" alt="">' : glyph ? "<b>" + glyph + "</b>" : "") + "</span>" + (isGroup ? '<span class="edm-n">' + ED.data.items.filter(x => x.PART_OF === it.ID).length + "</span>" : "");
+        el.innerHTML = '<span class="edm-face" style="background:' + esc(ED.colorFor(it)) + '">' + (key && ED.iconUrl(key) ? '<img src="' + ED.iconUrl(key, 48) + '" alt="">' : glyph ? "<b>" + glyph + "</b>" : "") + "</span>" + (isGroup ? '<span class="edm-n">' + counts.get(it.ID) + "</span>" : "");
         el.addEventListener("click", ev => { ev.stopPropagation(); const cur = ED.data.byId.get(it.ID); if (!cur) return; if (MODE && MODE.onMarkerClick) MODE.onMarkerClick(cur); else ED.select(cur); });
         const marker = new maplibregl.Marker({ element: el, draggable: true, anchor: "center" }).setLngLat([lng, lat]).addTo(map);
         marker.on("dragend", () => {
@@ -489,6 +490,7 @@
 
   /* ---------- 6. The data check ---------- */
   // Errors would break the map, so Publish refuses them. Warnings are worth a look but don't stop Publish.
+  const FOUND = new Set();        // files already found on the website, so each Publish doesn't check them all again
   ED.check = async function (opts) {
     const D = ED.data, out = [];
     const err = (where, msg, go) => out.push({ level: "error", where, msg, go });
@@ -550,7 +552,8 @@
         if (/^(https?:)?\/\//i.test(file) || file.startsWith("data:")) return;
         const paths = [ED.mediaDir() + file, BASE + "media/" + file];
         if (paths.some(p => PENDING.has(p))) return;
-        for (const p of paths) { try { const r = await fetch(p, { method: "HEAD", cache: "no-cache" }); if (r.ok) return; } catch (e) { /* offline */ } }
+        if (paths.some(p => FOUND.has(p))) return;
+        for (const p of paths) { try { const r = await fetch(p, { method: "HEAD", cache: "no-cache" }); if (r.ok) { FOUND.add(p); return; } } catch (e) { /* offline */ } }
         missing.push([where, file]);
       }));
       missing.forEach(([where, file]) => err(where, "The file " + file + " isn't on the website and wasn't uploaded here."));
@@ -559,7 +562,12 @@
   };
 
   /* ---------- 7. Publish, ZIP and Restore ---------- */
-  const GH = { get: () => { try { return JSON.parse(localStorage.getItem(KEY("gh")) || "{}"); } catch (e) { return {}; } }, set: v => { try { localStorage.setItem(KEY("gh"), JSON.stringify(v)); } catch (e) { /* fine */ } } };
+  // GitHub settings. The token is kept on this computer only if "Remember the Token" is on; otherwise only until the tab closes.
+  const GH = {
+    get: () => { let v = {}; try { v = JSON.parse(localStorage.getItem(KEY("gh")) || "{}"); } catch (e) { /* fine */ } try { const s = sessionStorage.getItem(KEY("gh_token")); if (s && !v.token) v.token = s; } catch (e) { /* fine */ } return v; },
+    set: v => { try { const keep = Object.assign({}, v); if (!v.remember) { sessionStorage.setItem(KEY("gh_token"), v.token || ""); delete keep.token; } else sessionStorage.removeItem(KEY("gh_token")); localStorage.setItem(KEY("gh"), JSON.stringify(keep)); } catch (e) { /* fine */ } },
+    forget: () => { try { const v = JSON.parse(localStorage.getItem(KEY("gh")) || "{}"); delete v.token; localStorage.setItem(KEY("gh"), JSON.stringify(v)); sessionStorage.removeItem(KEY("gh_token")); } catch (e) { /* fine */ } }
+  };
   function summary() {
     const lines = [];
     changedFiles().forEach(c => {
@@ -601,8 +609,9 @@
       '<label class="ed-field"><span class="ed-label">Repository</span><input class="ed-input" name="repo" value="' + esc(gh.repo || "") + '" placeholder="my-map"></label>' +
       '<label class="ed-field"><span class="ed-label">Branch</span><input class="ed-input" name="branch" value="' + esc(gh.branch || "main") + '"></label>' +
       '<label class="ed-field"><span class="ed-label">Folder in the Repository</span><input class="ed-input" name="folder" value="' + esc(gh.folder || "") + '" placeholder="blank if the map is at the top"></label></div>' +
-      '<label class="ed-field"><span class="ed-label">Access Token</span><input class="ed-input" name="token" type="password" value="' + esc(gh.token || "") + '" autocomplete="off"><small class="ed-help">A GitHub fine-grained token with Contents: Read and Write for this repository. It stays on this device only.</small></label>' +
-      '<div class="ed-btnrow"><button type="button" class="ed-btn" data-test="1">Test the Connection</button><button type="button" class="ed-btn" data-restore="1">Restore…</button></div></div>' +
+      '<label class="ed-field"><span class="ed-label">Access Token</span><input class="ed-input" name="token" type="password" value="' + esc(gh.token || "") + '" autocomplete="off"><small class="ed-help">A GitHub fine-grained token with Contents: Read and Write for this repository. It never leaves this device except to talk to GitHub.</small></label>' +
+      '<label class="ed-toggle"><input type="checkbox" name="remember"' + (gh.remember === false ? "" : " checked") + '><span class="ed-switch"></span><span class="ed-tl"><b>Remember the Token on This Computer</b><small>Turn off on a shared or public computer: it\'s then forgotten when this tab closes.</small></span></label>' +
+      '<div class="ed-btnrow"><button type="button" class="ed-btn" data-test="1">Test the Connection</button><button type="button" class="ed-btn" data-restore="1">Restore…</button><button type="button" class="ed-btn" data-forget="1">Forget the Token</button></div></div>' +
       '<div class="ed-target" data-for="zip"><p class="ed-note">A ZIP works with any web host: upload its files through your host\'s file manager or FTP, keeping the folders.</p>' +
       '<label class="ed-toggle"><input type="checkbox" name="whole"><span class="ed-switch"></span><span class="ed-tl"><b>The Whole Site</b><small>Off: only the changed files. On: every file, for a brand-new host.</small></span></label></div>' +
       '<div class="ed-prog" hidden><div class="pp-bar"><span></span></div><small></small></div>' +
@@ -616,7 +625,8 @@
       const syncT = () => { m.querySelectorAll(".ed-target").forEach(t => { t.hidden = t.dataset.for !== seg(); }); m.querySelector("[data-go]").disabled = !!errors.length || (!lines.length && seg() === "github" ); };
       m.querySelectorAll(".ed-seg button").forEach(b => b.addEventListener("click", () => { m.querySelectorAll(".ed-seg button").forEach(x => x.removeAttribute("aria-pressed")); b.setAttribute("aria-pressed", "true"); localStorage.setItem(KEY("target"), b.dataset.t); syncT(); }));
       syncT();
-      const read = () => { const v = {}; ["owner", "repo", "branch", "folder", "token"].forEach(k => { v[k] = m.querySelector('[name="' + k + '"]').value.trim(); }); v.folder = v.folder.replace(/^\/+|\/+$/g, ""); GH.set(v); return v; };
+      const read = () => { const v = {}; ["owner", "repo", "branch", "folder", "token"].forEach(k => { v[k] = m.querySelector('[name="' + k + '"]').value.trim(); }); v.folder = v.folder.replace(/^\/+|\/+$/g, ""); v.remember = m.querySelector('[name="remember"]').checked; GH.set(v); return v; };
+      m.querySelector("[data-forget]").addEventListener("click", () => { GH.forget(); m.querySelector('[name="token"]').value = ""; say("The token is forgotten on this computer.", 0); });
       const prog = m.querySelector(".ed-prog"), bar = prog.querySelector("span"), msg = prog.querySelector("small");
       const say = (t, pct) => { prog.hidden = false; msg.textContent = t; if (pct != null) bar.style.width = pct + "%"; };
       m.querySelector("[data-test]").addEventListener("click", async () => { const v = read(); try { await gh(v, "GET", ""); say("Connected to " + v.owner + "/" + v.repo + ".", 100); } catch (e) { say(e.message, 0); } });
@@ -737,7 +747,8 @@
   };
   const APP_FILES = ["index.html", "edit.html", "tools.html", "sw.js", "manifest.json", "icon-192.png", "icon-512.png",
     "app/core.js", "app/style.css", "app/happenings.js", "app/tours.js", "app/nearme.js", "app/oldmaps.js", "app/passport.js", "app/interiors.js", "app/welcome.js", "app/welcome-themes.js", "app/offline.js",
-    "app/editor.css", "app/ed-core.js", "app/ed-items.js", "app/ed-tours.js", "app/ed-haps.js", "app/ed-passport.js", "app/ed-look.js", "app/ed-map.js", "app/tools.js", "app/building.html"];
+    "app/editor.css", "app/ed-core.js", "app/ed-items.js", "app/ed-tours.js", "app/ed-haps.js", "app/ed-passport.js", "app/ed-look.js", "app/ed-map.js", "app/ed-setup.js", "app/tools.js", "app/tools-import.js", "app/qrcode-lite.js", "app/icon-editor.html", "app/building.html", "GUIDE.md",
+    "app/vendor/maplibre-gl.js", "app/vendor/maplibre-gl.css"];
   ED.APP_FILES = APP_FILES;
   async function publishZip(whole, say) {
     const enc = new TextEncoder(), entries = [], have = new Set();
@@ -808,6 +819,7 @@
     document.querySelectorAll('a[href="edit.html"], a[href="tools.html"]').forEach(a => { if (keep) a.href += "?" + keep; });
     document.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key === "z" && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); ED.undo(); } });
     addEventListener("beforeunload", e => { if (changedFiles().length || PENDING.size) { e.preventDefault(); e.returnValue = ""; } });   // unpublished changes are kept here, but say so
+    if (window.ETS_LIB) await window.ETS_LIB;
     if (!document.body.classList.contains("ed-tools")) makeMap();
     ED.show(PANELS[Q.get("panel")] ? Q.get("panel") : ORDER[0]);
     updateCount();

@@ -527,3 +527,22 @@ body.oldmap-on .here-chip { bottom: calc(98px + var(--safe-bottom)); }
 .c-series { margin-top: 18px; padding: 14px; border-radius: 16px; background: var(--surface-2); }
 .cs-head { font-size: 13px; font-weight: 700; color: var(--muted); }
 .cs-nav { display: flex; gap: 8px; margin-top: 10px; } .cs-nav .act { flex: 1; min-width: 0; height: 44px; } .cs-nav .act span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* skip link, list of places, clusters, search results for tours */
+.skip { position: fixed; z-index: 90; left: 12px; top: -60px; padding: 10px 16px; border-radius: 12px; background: var(--text); color: var(--surface); font-weight: 700; text-decoration: none; }
+.skip:focus { top: 12px; }
+.pl-h { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 18px 0 6px; }
+.pl-list { list-style: none; margin: 0; padding: 0; }
+.pl-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 6px 4px; border: 0; background: none; text-align: left; font-size: 15px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.pl-item small { width: 100%; padding-left: 22px; color: var(--muted); font-size: 12px; }
+.mk.in-cluster { display: none; }
+.mk-cluster { min-width: 44px; height: 44px; padding: 0 10px; border-radius: 999px; border: 3px solid var(--marker-ring); background: var(--accent); color: var(--on-accent); font-weight: 800; font-size: 15px; box-shadow: 0 3px 10px rgba(0,0,0,.3); }
+.m-dot.m-route { border-radius: 4px; }
+
+.resume-chip, .arrive-toast { position: fixed; z-index: 20; left: 16px; right: 16px; bottom: calc(16px + var(--safe-bottom)); display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 14px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); animation: rise .35s ease both; }
+@media (min-width: 900px) { .resume-chip, .arrive-toast { left: 50%; right: auto; transform: translateX(-50%); width: 460px; } }
+.resume-chip > svg { width: 24px; height: 24px; fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; flex: 0 0 auto; }
+.resume-chip span { flex: 1; min-width: 0; display: flex; flex-direction: column; } .resume-chip small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.resume-chip .act { height: 42px; } .rc-x { width: 36px; height: 36px; border: 0; border-radius: 999px; background: var(--surface-2); flex: 0 0 auto; }
+.arrive-toast { top: calc(84px + var(--safe-top)); bottom: auto; background: var(--accent); color: var(--on-accent); font-weight: 700; }
+.arrive-toast span { flex: 1; } .arrive-toast .act { background: var(--on-accent); color: var(--accent); height: 40px; }

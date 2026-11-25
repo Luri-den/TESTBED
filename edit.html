@@ -6,6 +6,7 @@
 <title>Map Editor</title>
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<link rel="stylesheet" href="app/vendor/maplibre-gl.css">
 <link rel="stylesheet" href="app/editor.css">
 </head>
 <body>
@@ -40,7 +41,14 @@
 <div class="ed-toast" id="edToast" role="status" aria-live="polite" hidden></div>
 <div class="ed-modal-back" id="edModal" hidden></div>
 
-<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<!-- the map library: this site's own copy if it has one (app/vendor/), otherwise from unpkg -->
+<script>
+  // the map library: this site's own copy if it has one (app/vendor/), otherwise from unpkg.com
+  window.ETS_LIB = new Promise(done => {
+    const add = (src, next) => { const s = document.createElement("script"); s.src = src; s.onload = done; s.onerror = next; document.head.appendChild(s); };
+    add("app/vendor/maplibre-gl.js", () => add("https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js", done));
+  });
+</script>
 <script src="app/ed-core.js"></script>
 <script src="app/ed-items.js"></script>
 <script src="app/ed-tours.js"></script>
@@ -48,6 +56,7 @@
 <script src="app/ed-passport.js"></script>
 <script src="app/ed-look.js"></script>
 <script src="app/ed-map.js"></script>
+<script src="app/ed-setup.js"></script>
 <script>ETSEditor.start();</script>
 </body>
 </html>

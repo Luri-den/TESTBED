@@ -139,9 +139,16 @@
     const sec = ui.section(box, "Stops (" + stops.length + ")");
     if (p.TYPE === "trail") ui.note(sec, "Stops are optional on a trail.");
     const list = h("div", "ed-stops");
-    list.innerHTML = stops.map((s, i) => { const it = ED.data.byId.get(s.ITEM); return '<div class="ed-stop' + (it ? "" : " bad") + '"><span class="ed-ord">' + (i + 1) + '</span><div class="mi"><b>' + esc(it ? it.NAME || it.ID : s.ITEM + " (missing)") + '</b><input data-note="' + i + '" placeholder="A note for this stop (optional)" value="' + esc(s.NOTE || "") + '"></div>' +
+    list.innerHTML = stops.map((s, i) => { const it = ED.data.byId.get(s.ITEM); return '<div class="ed-stop' + (it ? "" : " bad") + '"><span class="ed-ord">' + (i + 1) + '</span><div class="mi"><b>' + esc(it ? it.NAME || it.ID : s.ITEM + " (missing)") + '</b><input data-note="' + i + '" placeholder="A note for this stop (optional)" value="' + esc(s.NOTE || "") + '"><div class="ed-stop-more"><select data-veh="' + i + '" aria-label="Vehicle to this stop"><option value="">Vehicle: Same as the Tour</option>' + vehicleOpts(s.VEHICLE) + '</select><label class="ed-btn ed-small">' + (s.AUDIO ? "Audio ✓" : "+ Audio") + '<input type="file" accept="audio/*" data-aud="' + i + '" hidden></label>' + (s.AUDIO ? '<button type="button" class="ed-btn ed-small" data-noaud="' + i + '">Remove Audio</button>' : "") + "</div></div>" +
       (i ? '<button type="button" class="ed-btn ed-small" data-up="' + i + '" aria-label="Move up">↑</button>' : "") + (i < stops.length - 1 ? '<button type="button" class="ed-btn ed-small" data-down="' + i + '" aria-label="Move down">↓</button>' : "") + '<button type="button" class="ed-x" data-x="' + i + '" aria-label="Remove stop">✕</button></div>'; }).join("") || '<div class="ed-empty">No stops yet.</div>';
     list.querySelectorAll("[data-note]").forEach(inp => inp.addEventListener("change", () => edit(f, pr => { pr.STOPS[+inp.dataset.note].NOTE = inp.value; }, "stop note")));
+    list.querySelectorAll("[data-veh]").forEach(sel => sel.addEventListener("change", () => edit(f, pr => { if (sel.value) pr.STOPS[+sel.dataset.veh].VEHICLE = sel.value; else delete pr.STOPS[+sel.dataset.veh].VEHICLE; }, "stop vehicle")));
+    list.querySelectorAll("[data-aud]").forEach(inp => inp.addEventListener("change", () => {
+      const file = inp.files[0]; if (!file) return;
+      const i = +inp.dataset.aud, it = ED.data.byId.get(stops[i].ITEM), name = ED.fileName((p.TITLE || p.ID) + "-stop-" + (i + 1), (file.name.split(".").pop() || "mp3").toLowerCase());
+      ED.addPending(ED.mediaDir() + name, file); edit(f, pr => { pr.STOPS[i].AUDIO = name; }, "stop audio"); ED.rerenderInspector(); ED.toast("Audio added to stop " + (i + 1) + (it ? " (" + it.NAME + ")" : "") + ".");
+    }));
+    list.querySelectorAll("[data-noaud]").forEach(b => b.addEventListener("click", () => { edit(f, pr => { delete pr.STOPS[+b.dataset.noaud].AUDIO; }, "stop audio"); ED.rerenderInspector(); }));
     const move = (i, d) => edit(f, pr => { const a = pr.STOPS; [a[i], a[i + d]] = [a[i + d], a[i]]; }, "reordered stops");
     list.querySelectorAll("[data-up]").forEach(b => b.addEventListener("click", () => { move(+b.dataset.up, -1); ED.rerenderInspector(); }));
     list.querySelectorAll("[data-down]").forEach(b => b.addEventListener("click", () => { move(+b.dataset.down, 1); ED.rerenderInspector(); }));
@@ -150,6 +157,10 @@
     ui.buttons(sec, [{ text: "Add Stops", primary: true, onClick: () => addStops(f) }]);
     const orphans = ED.data.items.filter(i => i.KIND === "story" && !isFinite(parseFloat(i.LAT)));
     if (orphans.length) ui.picker(sec, "Add a Tour-Only Story", "", orphans.map(i => [i.ID, i.NAME || i.ID, "No location"]), v => { if (!v) return; edit(f, pr => { pr.STOPS.push({ ITEM: v }); }, "added stop"); ED.rerenderInspector(); }, "Stories with no location only appear inside tours.");
+  }
+  function vehicleOpts(cur) {
+    const icons = (ED.data.icons && ED.data.icons.icons) || {};
+    return Object.keys(icons).map(k => '<option value="' + esc(k) + '"' + (k === cur ? " selected" : "") + ">" + esc(icons[k].label || k) + "</option>").join("");
   }
   function addStops(f) {
     const p = f.properties;

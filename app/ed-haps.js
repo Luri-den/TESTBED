@@ -33,7 +33,12 @@
     }
     return out.filter(o => o.end > from && o.start < to);
   }
-  const nowWall = () => { const d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes()); };
+  // "now" on the wall clock in the site's time zone (Look panel), the same way the map works it out
+  const nowWall = () => {
+    const d = new Date(), tz = ED.site("TIME_ZONE") || undefined;
+    try { const p = {}; new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(d).forEach(x => { p[x.type] = x.value; }); return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute); }
+    catch (e) { return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes()); }
+  };
   function state(r) {
     if (String(r.ENABLED).toLowerCase() === "no" || String(r.PUBLIC).toLowerCase() === "no") return "hidden";
     if (String(r.REPEAT).toLowerCase() === "ongoing") return "ongoing";

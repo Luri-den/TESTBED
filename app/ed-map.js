@@ -168,6 +168,7 @@
     if (!interior) overlaysSection(side);
     else if (!bd) ui.note(side, "Start by adding the indoor plan above.");
   }
+  ED.useOutline = f => useOutline(f);
   function useOutline(f) {
     let ring = f.geometry.type === "Polygon" ? f.geometry.coordinates[0] : f.geometry.coordinates.slice().sort((a, b) => b[0].length - a[0].length)[0][0];
     const step = Math.max(1, Math.ceil(ring.length / 400)); ring = ring.filter((_, i) => i % step === 0 || i === ring.length - 1).map(c => [+c[0].toFixed(5), +c[1].toFixed(5)]);

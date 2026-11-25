@@ -10,10 +10,10 @@
     search: { name: "Search", fixed: true, wide: true }, daynight: { name: "Day / Night" }, categories: { name: "Categories", wide: true, opts: true },
     happenings: { name: "Happenings" }, tours: { name: "Tours" }, near: { name: "Near Me" }, passport: { name: "Passport" }, oldmaps: { name: "Old Maps" },
     mapstyle: { name: "Map Style" }, aerial: { name: "Aerial Button" }, home: { name: "Back to Start" }, more: { name: "More Menu (•••)" }, legend: { name: "Legend" },
-    share: { name: "Share This Map" }, about: { name: "About" }, offline: { name: "Save for Offline", moreOnly: true }, spacer: { name: "Gap", multi: true }
+    share: { name: "Share This Map" }, list: { name: "List of Places" }, about: { name: "About" }, offline: { name: "Save for Offline", moreOnly: true }, spacer: { name: "Gap", multi: true }
   };
   const ZONES = [["TOP", "Top Row"], ["TOP2", "Second Row"], ["TOP3", "Third Row"], ["LEFT", "Left Stack"], ["RIGHT", "Right Stack"], ["BOTTOM", "Bottom Row"]];
-  const DEFAULT = { TOP: "search,daynight", TOP2: "categories", TOP3: "happenings,tours", LEFT: "", RIGHT: "near,passport,oldmaps,mapstyle,home,more", BOTTOM: "", MORE: "share,legend,offline,about" };
+  const DEFAULT = { TOP: "search,daynight", TOP2: "categories", TOP3: "happenings,tours", LEFT: "", RIGHT: "near,passport,oldmaps,mapstyle,home,more", BOTTOM: "", MORE: "share,list,legend,offline,about" };
   const OLD = { chips: "categories", event: "about", tour: "tours", newrow: "" };
   function zoneList(z) {
     let v = ED.data.site["LAYOUT_" + z];
@@ -102,6 +102,7 @@
     ui.toggle(mo, "Slow Spin on Tours", ED.yes(S("TOUR_SPIN")), v => setS("TOUR_SPIN", v ? "yes" : "no", "tour spin"), "Stops the moment a visitor touches the map.");
     ui.select(mo, "Spin Speed", S("TOUR_SPIN_SPEED"), [["slow", "Slow"], ["", "Medium"], ["fast", "Fast"]], v => setS("TOUR_SPIN_SPEED", v, "spin speed"));
     ui.number(mo, "Tour Tilt (0 to 60 Degrees)", S("TOUR_TILT"), v => setS("TOUR_TILT", v, "tilt"), "Tips the map back a little while touring.", { min: 0, max: 60 });
+    ui.buttons(mo, [{ text: "Run the First-Time Setup Again", onClick: () => ED.runSetup && ED.runSetup() }]);
     ui.buttons(mo, [{ text: "Start From the Standard Look…", onClick: () => ED.confirm("Start from the standard look?", "Colors, fonts, buttons, welcome screen and wording go back to the standard settings. Your name, start view, allowed area and places stay.", "Reset the Look", () => {
       const keep = /^(PLACE|CENTER_LAT|CENTER_LNG|ZOOM|BOUNDS_|MIN_ZOOM|MAX_ZOOM|FIT_TO_MARKERS|TIME_ZONE|PASSPORT|PASSPORT_RANKS|PRIZES|EVENT_TITLE|EVENT_TEXT|EVENT_BUTTON|MEMORY_LINK|LOCAL_IMAGERY_)/;
       ED.change("site.csv", f => { f.rows.forEach(r => { if (!keep.test(r.KEY)) r.VALUE = ""; }); f.rows = f.rows.filter(r => !String(r.KEY).startsWith("LABEL.")); }, "standard look"); ED.rerender(); }) }]);

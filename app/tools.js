@@ -244,14 +244,55 @@
   /* ---------- Building Designer ---------- */
   function buildingPanel(side) {
     ui.head(side, "Building Designer", "Draw a floor plan: walls, rooms, stairs, doors, labels and symbols, floor by floor.");
-    ui.note(side, "When a floor is ready, use its Export PNG button, then add that picture in the editor: Map panel, Indoor Plan (inside an interior folder).");
+    ui.note(side, "When a floor is ready, press Send to Indoor Plan (beside Export PNG). It goes straight into the interior you pick, ready to publish.");
     ui.note(side, "Save JSON keeps the drawing so you can open and change it later. It's saved on your computer, not on the website.");
     ui.buttons(side, [{ text: "Open It in a New Tab", onClick: () => window.open("app/building.html", "_blank") }]);
     ED.inspect(box => { box.classList.add("ed-insp-wide"); box.innerHTML = '<iframe class="bld-frame" src="app/building.html" title="Building Designer"></iframe>'; });
+  }
+
+  // Building Designer → an interior's Indoor Plan: the floor picture goes into that interior's folder, ready to publish
+  ED.sendPlan = async function (plan) {
+    const folders = ED.interiorFolders ? ED.interiorFolders() : [...new Set(ED.data.items.map(i => i.INSIDE).filter(Boolean))];
+    if (!folders.length) { ED.modal("<h2>No Interior Yet</h2><p>Make one first: in the editor, open the place it belongs to, then Inside This Place, then Make an Interior. Then come back and send the plan.</p>"); return; }
+    ED.modal("<h2>Send to Indoor Plan</h2><p>The floor \"" + esc(plan.name) + "\" goes into an interior as a picture.</p>", (m, close) => {
+      let folder = folders[0], fname = plan.name || "Ground Floor";
+      ui.select(m, "Which Interior", folder, folders.map(f => [f, f]), v => { folder = v; });
+      ui.text(m, "Floor Name", fname, v => { fname = v; }, "A floor with the same name is replaced; a new name adds a floor.", { live: v => { fname = v; } });
+      ui.buttons(m, [{ text: "Send It", primary: true, onClick: async () => {
+        const dir = ED.BASE + "events/" + folder + "/", read = async path => { const d = ED.getDraft(path); if (d != null) return d; try { const r = await fetch(path, { cache: "no-cache" }); return r.ok ? await r.text() : null; } catch (e) { return null; } };
+        let mapj = null; try { mapj = JSON.parse(await read(dir + "data/map.json") || "null"); } catch (e) { /* new */ }
+        mapj = mapj || { outline: null, overlays: [], backdrop: null };
+        const b = mapj.backdrop = mapj.backdrop || { title: plan.title || folder, background: "#FFFFFF", floors: [] };
+        const file = "plans/" + (ED.slug(fname) || "floor") + ".png";
+        const hit = (b.floors || []).find(f => String(f.name).toLowerCase() === fname.toLowerCase());
+        if (hit) hit.image = file; else { b.floors = b.floors || []; b.floors.push({ id: ED.slug(fname) || "floor" + (b.floors.length + 1), name: fname, image: file }); }
+        ED.addPending(dir + "media/" + file, plan.blob);
+        ED.addExtraFile(dir + "data/map.json", JSON.stringify(mapj, null, 2) + "\n");
+        let ej = null; try { ej = JSON.parse(await read(dir + "event.json") || "null"); } catch (e) { /* new */ }
+        ej = ej || { title: folder, kind: "interior", overrides: [] };
+        if (!(ej.overrides || []).includes("map.json")) { ej.overrides = (ej.overrides || []).concat("map.json"); ED.addExtraFile(dir + "event.json", JSON.stringify(ej, null, 2) + "\n"); }
+        close(); ED.toast((hit ? "Replaced" : "Added") + " the floor " + fname + " in " + folder + ". Publish to put it on the website.", 6000);
+      } }]);
+    });
+  };
+
+  /* ---------- the site's own copy of the map library ---------- */
+  function siteFilesPanel(side) {
+    ui.head(side, "Site Files", "Keep a copy of the map library (MapLibre) on this site, so the map doesn't depend on another website being up.");
+    ui.note(side, "The map and editor use the site's copy in app/vendor/ when it's there, and fall back to unpkg.com when it isn't. The copy is about 800 KB and only needs doing once.");
+    ui.buttons(side, [{ text: "Keep a Copy on This Site", primary: true, onClick: async e => {
+      e.target.disabled = true;
+      try {
+        for (const f of ["maplibre-gl.js", "maplibre-gl.css"]) { const r = await fetch("https://unpkg.com/maplibre-gl@4.7.1/dist/" + f); if (!r.ok) throw new Error("unpkg.com said " + r.status); ED.addPending("app/vendor/" + f, await r.blob()); }
+        ED.toast("Copied. Press Publish to put it on the website.", 5000);
+      } catch (err) { ED.toast("The library couldn't be fetched (" + err.message + "). Try again later.", 6000); e.target.disabled = false; }
+    } }]);
+    ED.inspect(box => { box.classList.add("ed-insp-wide"); fetch("app/vendor/maplibre-gl.js", { method: "HEAD", cache: "no-cache" }).then(r => { ui.head(box, r.ok ? "This Site Has Its Own Copy" : "No Copy Yet", r.ok ? "The map loads its library from this site." : "The map loads its library from unpkg.com for now."); }).catch(() => {}); });
   }
 
   ED.panel("qr", { title: "QR Signs", render: qrPanel });
   ED.panel("icons", { title: "Icons", render: iconsPanel, onShow: () => { draft = null; ED.rerender(); } });
   ED.panel("shapes", { title: "Marker Shapes", render: shapesPanel });
   ED.panel("building", { title: "Building Designer", render: buildingPanel });
+  ED.panel("sitefiles", { title: "Site Files", render: siteFilesPanel });
 })();

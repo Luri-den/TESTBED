@@ -11,8 +11,12 @@
   const PATTERNS = ["solid", "stripes", "lines", "diagonal", "checks", "dots", "grid", "waves", "zigzag", "crosses"];
   let filter = "all", query = "";
 
-  const isGroup = it => ED.data.items.some(x => x.PART_OF === it.ID);
-  const members = it => ED.data.items.filter(x => x.PART_OF === it.ID);
+  // who's in which group, worked out once per change instead of once per row (big sites stay quick)
+  let memo = null, memoFor = null;
+  const groupsMap = () => { if (memoFor !== ED.data.items || !memo || memo.size !== undefined && memo._n !== ED.data.items.length) { memo = new Map(); ED.data.items.forEach(x => { if (x.PART_OF) { if (!memo.has(x.PART_OF)) memo.set(x.PART_OF, []); memo.get(x.PART_OF).push(x); } }); memo._n = ED.data.items.length; memoFor = ED.data.items; } return memo; };
+  ED.onChange(() => { memo = null; });
+  const isGroup = it => groupsMap().has(it.ID);
+  const members = it => groupsMap().get(it.ID) || [];
   const hasPos = it => isFinite(parseFloat(it.LAT)) && isFinite(parseFloat(it.LONG));
   const shapeOptions = (blankText) => [["", blankText]].concat(SHAPES.map(s => [s, title(s)]), Object.keys((ED.data.icons && ED.data.icons.shapes) || {}).map(k => [k, (ED.data.icons.shapes[k].label || k) + " (drawn)"]));
   ED.shapeOptions = shapeOptions;
@@ -21,7 +25,7 @@
   function render(side) {
     const D = ED.data;
     ui.head(side, "Items", "Places, Photo Spots and Stories. Tap one to edit it, or drag its marker to move it.");
-    ui.buttons(side, [{ text: "+ Add a Place", primary: true, onClick: () => startAdd("place") }, { text: "+ Photo Spot", onClick: () => startAdd("photospot") }, { text: "+ Story", onClick: () => startAdd("story") }]);
+    ui.buttons(side, [{ text: "+ Add a Place", primary: true, onClick: () => startAdd("place") }, { text: "+ Photo Spot", onClick: () => startAdd("photospot") }, { text: "+ Story", onClick: () => startAdd("story") }, { text: "Bring In From a Spreadsheet", onClick: importSheet, title: "Paste rows from Excel or Google Sheets, or pick a CSV file" }]);
     const s = h("div", "ed-search"); s.innerHTML = '<input class="ed-input" type="search" placeholder="Find an item" aria-label="Find an item" value="' + esc(query) + '">';
     side.appendChild(s);
     const inp = s.querySelector("input");
@@ -60,6 +64,78 @@
     ui.note(cs, "Each place can belong to one category. A category sets the marker's color, icon and shape, and gets its own chip on the map.");
     ui.list(cs, [...D.cats.values()].map(c => ({ id: c.CODE, title: c.LABEL || c.CODE, sub: D.items.filter(i => i.CATEGORY === c.CODE).length + " items" + (ED.yes(c.RANKED) ? " · Ranked" : ""), color: c.COLOR, icon: c.ICON ? ED.iconUrl(c.ICON, 40) : "" })), { empty: "No categories yet.", onPick: code => editCategory(code) });
     ui.buttons(cs, [{ text: "+ New Category", onClick: () => newCategory() }]);
+  }
+
+  /* ---------- bringing in places from a spreadsheet ---------- */
+  const FIELDS = [["NAME", "Name", /^(name|title|place|site)$/i], ["LAT", "Latitude", /^(lat|latitude|y)$/i], ["LONG", "Longitude", /^(lon|long|lng|longitude|x)$/i], ["ADDRESS", "Address", /address|street|location/i],
+    ["CATEGORY", "Category", /categ|type|kind of/i], ["TEXT", "Description", /desc|details|text|about|notes?$/i], ["WEBSITE", "Website", /web|url|link/i], ["PHONE", "Phone", /phone|tel/i], ["HOURS", "Hours", /hours|open/i],
+    ["YEAR_START", "Year Opened", /year|built|est/i], ["OTHER_NAMES", "Other Names", /other|aka|also/i], ["ORG", "Organization", /org|owner|run by/i]];
+  function readRows(text) {
+    text = String(text || "").replace(/^\uFEFF/, "").trim();
+    if (!text) return [];
+    const first = text.split(/\r?\n/)[0];
+    if (first.includes("\t")) return text.split(/\r?\n/).map(l => l.split("\t").map(c => c.replace(/^"(.*)"$/, "$1").replace(/""/g, '"').trim()));      // pasted from a spreadsheet
+    const p = ED.parseCSV(text);                     // a CSV file (quotes and commas inside cells are fine)
+    return [p.cols].concat(p.rows.map(r => p.cols.map(c => r[c])));
+  }
+  function importSheet() {
+    let rows = [], head = [], map = {}, catAll = "", geocode = true;
+    const guess = () => { map = {}; FIELDS.forEach(([k, , re]) => { const i = head.findIndex(h => re.test(String(h).trim())); if (i >= 0 && !Object.values(map).includes(i)) map[k] = i; }); };
+    const body = () => {
+      const data = rows.slice(1).filter(r => r.some(c => String(c || "").trim()));
+      return "<h2>Bring In From a Spreadsheet</h2><p>Copy the rows in Excel or Google Sheets (with the heading row) and paste them here, or pick a CSV file.</p>" +
+        '<textarea class="ed-input" rows="5" data-paste placeholder="Name&#9;Address&#9;Category&#10;Main Street Market&#9;100 Main St&#9;Food"></textarea><div class="ed-btnrow"><label class="ed-btn">Pick a CSV File<input type="file" accept=".csv,.tsv,.txt,text/csv" data-file hidden></label><button type="button" class="ed-btn" data-read="1">Read It</button></div>' +
+        (head.length ? "<h3>Which Column Is Which</h3><div class=\"ed-grid2\">" + FIELDS.map(([k, label]) => '<label class="ed-field"><span class="ed-label">' + label + (k === "NAME" ? " (Needed)" : "") + '</span><select class="ed-input" data-map="' + k + '"><option value="">Not in the Sheet</option>' + head.map((h, i) => '<option value="' + i + '"' + (map[k] === i ? " selected" : "") + ">" + esc(h || "Column " + (i + 1)) + "</option>").join("") + "</select></label>").join("") + "</div>" +
+          (map.CATEGORY == null ? '<label class="ed-field"><span class="ed-label">Category for Every Row</span><select class="ed-input" data-catall><option value="">None</option>' + [...ED.data.cats.values()].map(c => '<option value="' + esc(c.CODE) + '"' + (catAll === c.CODE ? " selected" : "") + ">" + esc(c.LABEL || c.CODE) + "</option>").join("") + "</select></label>" : '<p class="ed-note">Category names that don\'t exist yet become new categories.</p>') +
+          (map.ADDRESS != null ? '<label class="ed-toggle"><input type="checkbox" data-geo' + (geocode ? " checked" : "") + '><span class="ed-switch"></span><span class="ed-tl"><b>Find Locations From the Addresses</b><small>For rows without a latitude and longitude. About one per second, using OpenStreetMap.</small></span></label>' : "") +
+          "<h3>First Rows</h3><table class=\"ed-table\"><tr>" + FIELDS.filter(([k]) => map[k] != null).map(([, l]) => "<th>" + l + "</th>").join("") + "</tr>" + data.slice(0, 5).map(r => "<tr>" + FIELDS.filter(([k]) => map[k] != null).map(([k]) => "<td>" + esc(r[map[k]] || "") + "</td>").join("") + "</tr>").join("") + "</table>" +
+          '<p class="ed-note">' + data.length + " rows.</p>" : "") +
+        '<div class="ed-prog" hidden><div class="pp-bar"><span></span></div><small></small></div><div class="ed-btnrow end"><button type="button" class="ed-btn ed-primary" data-go="1"' + (head.length && map.NAME != null ? "" : " disabled") + ">Add These Places</button></div>";
+    };
+    const show = () => ED.modal(body(), (m, close) => {
+      const q = sel => m.querySelector(sel);
+      const take = text => { rows = readRows(text); head = rows[0] || []; guess(); close(); show(); };
+      q("[data-read]").addEventListener("click", () => take(q("[data-paste]").value));
+      q("[data-file]").addEventListener("change", e => { const f = e.target.files[0]; if (f) f.text().then(take); });
+      m.querySelectorAll("[data-map]").forEach(s => s.addEventListener("change", () => { if (s.value === "") delete map[s.dataset.map]; else map[s.dataset.map] = +s.value; close(); show(); }));
+      const ca = q("[data-catall]"); if (ca) ca.addEventListener("change", () => { catAll = ca.value; });
+      const geo = q("[data-geo]"); if (geo) geo.addEventListener("change", () => { geocode = geo.checked; });
+      q("[data-go]").addEventListener("click", async e => {
+        e.target.disabled = true;
+        const prog = q(".ed-prog"), bar = prog.querySelector("span"), msg = prog.querySelector("small"); prog.hidden = false;
+        const data = rows.slice(1).filter(r => String(r[map.NAME] || "").trim());
+        const cell = (r, k) => map[k] == null ? "" : String(r[map[k]] == null ? "" : r[map[k]]).trim();
+        // categories by name: an existing one, or a new one
+        const catFor = new Map(); const newCats = [];
+        if (map.CATEGORY != null) data.forEach(r => {
+          const v = cell(r, "CATEGORY"); if (!v || catFor.has(v.toLowerCase())) return;
+          const hit = [...ED.data.cats.values()].find(c => c.CODE.toLowerCase() === v.toLowerCase() || String(c.LABEL || "").toLowerCase() === v.toLowerCase());
+          if (hit) catFor.set(v.toLowerCase(), hit.CODE);
+          else { let code = v.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 6) || "CAT"; while (ED.data.cats.has(code) || newCats.some(c => c.CODE === code)) code = code.slice(0, 5) + Math.floor(Math.random() * 9); newCats.push({ CODE: code, LABEL: v }); catFor.set(v.toLowerCase(), code); }
+        });
+        const out = [];
+        for (let i = 0; i < data.length; i++) {
+          const r = data[i], row = { KIND: "place", NAME: cell(r, "NAME") };
+          FIELDS.forEach(([k]) => { if (k !== "NAME" && k !== "CATEGORY" && k !== "LAT" && k !== "LONG") row[k] = cell(r, k); });
+          row.CATEGORY = map.CATEGORY != null ? (catFor.get(cell(r, "CATEGORY").toLowerCase()) || "") : catAll;
+          let lat = parseFloat(cell(r, "LAT")), lng = parseFloat(cell(r, "LONG"));
+          if ((!isFinite(lat) || !isFinite(lng)) && geocode && row.ADDRESS) {
+            msg.textContent = "Finding " + row.NAME + " (" + (i + 1) + " of " + data.length + ")…"; bar.style.width = Math.round(100 * i / data.length) + "%";
+            try { const res = await (await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(row.ADDRESS))).json(); if (res[0]) { lat = +res[0].lat; lng = +res[0].lon; } } catch (err) { /* left without a location */ }
+            await new Promise(res => setTimeout(res, 1100));        // OpenStreetMap asks for no more than one search a second
+          }
+          if (isFinite(lat) && isFinite(lng)) { row.LAT = lat.toFixed(6); row.LONG = lng.toFixed(6); }
+          out.push(row);
+        }
+        const palette = ["#1D4ED8", "#C2410C", "#7C3AED", "#15803D", "#B45309", "#BE185D", "#0E7490", "#4D7C0F"];
+        if (newCats.length) ED.change("categories.csv", f => newCats.forEach((c, k) => f.rows.push(Object.assign(Object.fromEntries(f.cols.map(x => [x, ""])), c, { COLOR: palette[(f.rows.length + k) % palette.length], SHAPE: "circle" }))), "new categories");
+        ED.change("items.csv", f => out.forEach(row => { row.ID = ED.newId("PL"); f.rows.push(Object.assign(Object.fromEntries(f.cols.map(c => [c, ""])), row)); ED.data = ED.data; }), "brought in " + out.length + " places");
+        const noLoc = out.filter(r => !r.LAT).length;
+        close(); ED.rerender(); ED.fitAll(true);
+        ED.toast("Added " + out.length + " places" + (newCats.length ? " and " + newCats.length + " categories" : "") + "." + (noLoc ? " " + noLoc + " have no location yet: open each and use Place It on the Map." : ""), 7000);
+      });
+    }, { wide: true });
+    show();
   }
 
   /* ---------- adding ---------- */
@@ -144,12 +220,15 @@
     ui.select(sec, "Show Members", g.SHOW_MEMBERS, [["", "Site Default"], ["tap", "When Tapped"], ["always", "Always, When Zoomed In"]], v => set(g, "SHOW_MEMBERS", v, "show members"));
   }
   // "Add Places": tap markers to put them in the group or take them out
+  let boxing = false, boxFirst = null;
   function addMembers(g, makeNew) {
+    boxing = false; boxFirst = null;
     const picked = new Set(members(g).map(m => m.ID));
     const paint = () => { const m = ED.mode(); if (m) { m.picked = picked; ED.refreshMarkers(); const c = document.querySelector("#edMode .em-count"); if (c) c.textContent = picked.size + " in the group"; } };
     ED.setMode({
       title: "Adding places to " + (g.NAME || g.ID) + ".", text: "Tap markers to add or remove them. Tap the map to add a new place to the group.",
-      extra: '<span class="ed-pill em-count">' + picked.size + " in the group</span>", picked,
+      extra: '<span class="ed-pill em-count">' + picked.size + ' in the group</span><button type="button" class="ed-btn" data-box="1">Draw a Box</button>', picked,
+      wire: box => box.querySelector("[data-box]").addEventListener("click", () => { boxFirst = null; boxing = true; ED.toast("Tap one corner of the box, then the opposite corner. Every place inside joins the group."); }),
       dim: x => x !== g && !x.PART_OF || x.PART_OF === g.ID || x === g,
       onMarkerClick: m => {
         if (m === g) return;
@@ -160,7 +239,19 @@
         inIt ? picked.delete(m.ID) : picked.add(m.ID);
         paint(); ED.rerender();
       },
-      onMapClick: ll => { ED.setMode(null); create("place", ll, g.ID); },
+      onMapClick: ll => {
+        if (boxing) {
+          if (!boxFirst) { boxFirst = ll; ED.toast("Now tap the opposite corner."); return; }
+          const w = Math.min(boxFirst[0], ll[0]), e = Math.max(boxFirst[0], ll[0]), s = Math.min(boxFirst[1], ll[1]), n = Math.max(boxFirst[1], ll[1]);
+          boxing = false; boxFirst = null;
+          const inside = ED.data.items.filter(x => x !== g && !isGroup(x) && x.PART_OF !== g.ID && hasPos(x) && +x.LONG >= w && +x.LONG <= e && +x.LAT >= s && +x.LAT <= n);
+          if (!inside.length) { ED.toast("No places inside that box."); return; }
+          ED.change("items.csv", () => inside.forEach(x => { x.PART_OF = g.ID; }), "added " + inside.length + " places to " + g.NAME);
+          inside.forEach(x => picked.add(x.ID)); paint(); ED.rerender(); ED.toast("Added " + inside.length + " places.");
+          return;
+        }
+        ED.setMode(null); create("place", ll, g.ID);
+      },
       onDone: () => { selectItem(g); if (makeNew && !members(g).length) ED.toast("A group needs at least one place. Add some with Add Places."); }
     });
     paint();

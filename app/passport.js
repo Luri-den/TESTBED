@@ -107,6 +107,8 @@
       const k = stars(s).k, was = P.stars[s.id] || 0;
       if (k > was) { P.stars[s.id] = k; queue.push({ kind: "star", stamp: s, stars: k }); }
     });
+    // a task that earns a star celebrates once: the star (the task's own celebration is dropped)
+    if (queue.some(j => j.kind === "star")) for (let k = queue.length - 1; k >= 0; k--) if (queue[k].kind === "task") queue.splice(k, 1);
     const act = STAMPS.filter(stampActive);
     if (!P.grand && act.length && act.every(s => (P.stars[s.id] || 0) >= 3)) { P.grand = true; queue.push({ kind: "grand" }); }
     if (prizesOn) PRIZES.forEach(z => { if (!P.prizes[z.id] && prizeMet(z)) { P.prizes[z.id] = Date.now(); queue.push({ kind: "prize", prize: z }); } });

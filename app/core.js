@@ -114,7 +114,7 @@
     since: "Since {y}", listen: "Listen", watch: "Watch", transcript: "Transcript", group: "Group",
     photoSpot: "Photo Spot", story: "Story", about: "About", usOnly: "Only available for places in the United States",
     hours: "Hours", address: "Address", home: "Back to Start View", exitEvent: "Back to Main Map", exitShort: "Exit", eventMap: "Event Map",
-    memory: "Do you have a memory of this place? Share it", series: "Series: {name}", ofN: "{n} of {total}", legend: "Legend", stepInside: "Step Inside", inside: "Inside",
+    memory: "Do you have a memory of this place? Share it", happening: "Happening", tour: "Tour", trail: "Trail", placeList: "List of Places", skipList: "Skip to the List of Places", series: "Series: {name}", ofN: "{n} of {total}", legend: "Legend", stepInside: "Step Inside", inside: "Inside",
     saveOffline: "Save for Offline Use", photoOf: "Photo {n} of {total}", prev: "Previous", next: "Next", zoomIn: "Zoom In", zoomOut: "Zoom Out"
   };
   let SITE = {};
@@ -127,6 +127,16 @@
   /* ---------- 2. Loading the site's data ---------- */
   const DATA = { items: [], byId: new Map(), cats: new Map(), media: new Map(), map: null, icons: { icons: {}, shapes: {} }, happenings: [], routes: [] };
 
+  let LATER = Promise.resolve([[], null]);
+  async function loadLater() {
+    const [haps, routes] = await LATER;
+    DATA.happenings = haps || [];
+    DATA.routes = (routes && Array.isArray(routes.features)) ? routes.features.filter(f => f && f.properties && f.properties.ID) : [];
+    if (EVENT && EVENT.kind === "interior") {     // the main map's happenings and tours stay outside unless the folder has its own
+      if (!EVENT.overrides.includes("happenings.csv")) DATA.happenings = [];
+      if (!EVENT.overrides.includes("routes.geojson")) DATA.routes = [];
+    }
+  }
   async function loadAll() {
     const ev = (Q.get("event") || "").replace(/[^a-z0-9_-]/gi, "");
     if (ev) {
@@ -142,16 +152,13 @@
       const merged = {}; main.forEach(r => { if (r.KEY) merged[r.KEY.trim()] = r.VALUE || ""; });
       SITE = Object.assign(merged, SITE);
     }
-    const [items, cats, media, map, icons, haps, routes] = await Promise.all([
-      getCSV("items.csv"), getCSV("categories.csv"), getCSV("media.csv"), getJSON("map.json"), getJSON("icons.json"), getCSV("happenings.csv"), getJSON("routes.geojson")
+    // What the first screen needs is waited for; happenings and tours are fetched alongside but only waited for
+    // after the map and its markers are up.
+    LATER = Promise.all([getCSV("happenings.csv"), getJSON("routes.geojson")]);
+    const [items, cats, media, map, icons] = await Promise.all([
+      getCSV("items.csv"), getCSV("categories.csv"), getCSV("media.csv"), getJSON("map.json"), getJSON("icons.json")
     ]);
-    DATA.happenings = haps;
-    DATA.routes = (routes && Array.isArray(routes.features)) ? routes.features.filter(f => f && f.properties && f.properties.ID) : [];
-    if (EVENT && EVENT.kind === "interior") {     // inside a building: the main map's happenings, tours and passport stay outside unless the folder has its own
-      if (!EVENT.overrides.includes("happenings.csv")) DATA.happenings = [];
-      if (!EVENT.overrides.includes("routes.geojson")) DATA.routes = [];
-      if (!EVENT.overrides.includes("passport.csv")) SITE.PASSPORT = "no";
-    }
+    if (EVENT && EVENT.kind === "interior" && !EVENT.overrides.includes("passport.csv")) SITE.PASSPORT = "no";   // inside a building: the main map's passport stays outside
     if (EVENT) media.forEach(m => m.FILE && EVENT.media.add(m.FILE));
     DATA.map = map || { outline: null, overlays: [], backdrop: null };
     DATA.icons = icons || { icons: {}, shapes: {} };
@@ -392,6 +399,7 @@
     map.once("load", () => { MAP_LOADED = true; });
     map.on("error", e => { if (e && e.error && /tiles|style/i.test(String(e.error.message))) warn("Map background: " + e.error.message); });
     map.on("zoomend", refreshMarkerVisibility);
+    map.on("moveend", () => { if (clusterOn()) cluster(); });
     map.on("movestart", e => { if (e && e.originalEvent && GROUP_VIEW) GROUP_VIEW.moved = true; });   // the visitor moved it themselves
     map.on("click", e => {            // tapping empty map closes menus and the card
       if (!e.originalEvent || e.originalEvent.target !== map.getCanvas()) return;
@@ -532,7 +540,40 @@
       el.classList.toggle("is-open", it === OPEN_GROUP);
     });
     updateGroupLines();
+    cluster();
   }
+  // Clustering: with many places, markers that would overlap become one bubble with a count, until zoomed in.
+  // CLUSTER in site.csv: yes, no, or blank (on automatically past 150 places).
+  const CLUSTERS = [];
+  function clusterOn() { const v = String(SITE.CLUSTER || "").toLowerCase(); return v === "yes" || (v !== "no" && MARKERS.size > 150); }
+  function cluster() {
+    CLUSTERS.forEach(m => m.remove()); CLUSTERS.length = 0;
+    MARKERS.forEach(({ el }) => el.classList.remove("in-cluster"));
+    if (!map || !clusterOn() || map.getZoom() >= (parseFloat(SITE.CLUSTER_ZOOM) || 15) || touringNow) return;
+    // greedy: each unclaimed marker gathers everything within 56px of it (no grid edges to split a crowd)
+    const pts = [];
+    MARKERS.forEach(({ el }, id) => {
+      if (el.hidden) return;
+      const it = DATA.byId.get(id); if (it === OPEN_GROUP || (OPEN_GROUP && it.PART_OF === OPEN_GROUP.ID) || (HL && HL.has(id))) return;
+      pts.push({ it, p: map.project([it.lng, it.lat]) });
+    });
+    const R2 = 56 * 56, cells = [], used = new Set();
+    pts.forEach(a => {
+      if (used.has(a)) return;
+      const near = pts.filter(b => !used.has(b) && (a.p.x - b.p.x) ** 2 + (a.p.y - b.p.y) ** 2 <= R2);
+      if (near.length >= 3) { near.forEach(b => used.add(b)); cells.push(near.map(b => b.it)); }
+    });
+    cells.forEach(list => {
+      if (list.length < 3) return;
+      list.forEach(it => MARKERS.get(it.ID).el.classList.add("in-cluster"));
+      const lng = list.reduce((a, i) => a + i.lng, 0) / list.length, lat = list.reduce((a, i) => a + i.lat, 0) / list.length;
+      const b = document.createElement("button"); b.type = "button"; b.className = "mk-cluster"; b.textContent = list.length;
+      b.setAttribute("aria-label", list.length + " places here. Zoom in.");
+      b.addEventListener("click", ev => { ev.stopPropagation(); map.fitBounds(boundsOf(list.map(i => [i.lng, i.lat])), { padding: 80, maxZoom: (parseFloat(SITE.CLUSTER_ZOOM) || 15) + 1, duration: REDUCED ? 0 : 600 }); });
+      CLUSTERS.push(new maplibregl.Marker({ element: b, anchor: "center" }).setLngLat([lng, lat]).addTo(map));
+    });
+  }
+  let touringNow = false;
   function groupLinesData() {
     const feats = [];
     if (OPEN_GROUP && OPEN_GROUP.hasPos) {
@@ -836,7 +877,7 @@
   // Zones (top row, second row, left and right stacks, bottom row, More menu) are set in site.csv
   // with LAYOUT_TOP, LAYOUT_TOP2, LAYOUT_LEFT, LAYOUT_RIGHT, LAYOUT_BOTTOM and LAYOUT_MORE.
   const OLD_NAMES = { chips: "categories", event: "about", tour: "tours", newrow: "" };
-  const DEFAULT_LAYOUT = { TOP: "search,daynight", TOP2: "categories", TOP3: "happenings,tours", LEFT: "", RIGHT: "near,passport,mapstyle,home,more", BOTTOM: "", MORE: "share,legend,offline,about" };
+  const DEFAULT_LAYOUT = { TOP: "search,daynight", TOP2: "categories", TOP3: "happenings,tours", LEFT: "", RIGHT: "near,passport,mapstyle,home,more", BOTTOM: "", MORE: "share,list,legend,offline,about" };
   function zoneList(z) {
     let v = SITE["LAYOUT_" + z];
     if (z === "RIGHT" && !v && SITE.LAYOUT_FLOAT) v = SITE.LAYOUT_FLOAT;
@@ -914,9 +955,22 @@
     mapstyle: { show: () => true, label: () => L("mapStyle"), run: () => openMapStyleMenu($("zoneRight")) },
     home: { show: () => true, label: () => L("home"), run: () => RENDER.home().click() },
     daynight: { show: () => true, label: () => NIGHT ? L("dayMode") : L("nightMode"), run: () => setNight(!NIGHT) },
+    list: { show: () => DATA.items.length > 0, label: () => L("placeList"), run: openPlaceList },
     legend: { show: () => DATA.cats.size > 0, label: () => L("legend"), run: () => openLegend($("zoneRight"), [...DATA.cats.values()].filter(c => DATA.items.some(i => i.CATEGORY === c.CODE)), ["photospot", "story"].filter(k => DATA.items.some(i => i.kind === k))) },
     offline: { show: () => "serviceWorker" in navigator && !EMBED && location.protocol !== "file:", label: () => L("saveOffline"), run: () => loadFeature("offline").then(() => window.ETSOffline && window.ETSOffline.open()) }
   };
+  // Every place in one plain list, grouped by category: for keyboards and screen readers, and anyone who prefers a list
+  function openPlaceList() {
+    closeMenus();
+    const groups = new Map();
+    DATA.items.filter(i => i.hasPos || i.kind !== "story").forEach(i => { const k = i.CATEGORY && DATA.cats.get(i.CATEGORY) ? i.CATEGORY : ""; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i); });
+    const html = '<div class="c-head"><h2 class="c-title">' + esc(L("placeList")) + "</h2></div>" + [...groups.entries()].map(([k, list]) => {
+      const c = DATA.cats.get(k);
+      return '<h3 class="pl-h">' + esc(c ? c.LABEL || c.CODE : L("all")) + '</h3><ul class="pl-list">' + list.sort((a, b) => String(a.NAME).localeCompare(String(b.NAME))).map(i => '<li><button type="button" class="pl-item" data-id="' + esc(i.ID) + '"><span class="m-dot" style="background:' + esc(colorFor(i)) + '"></span>' + esc(i.NAME || i.ID) + (i.PART_OF && DATA.byId.get(i.PART_OF) ? "<small>" + esc(L("partOf") + " " + DATA.byId.get(i.PART_OF).NAME) + "</small>" : "") + "</button></li>").join("") + "</ul>";
+    }).join("");
+    openSheetHtml(html, body => body.querySelectorAll("[data-id]").forEach(b => b.addEventListener("click", () => goTo(DATA.byId.get(b.dataset.id)))), "open");
+    const first = $("sheetBody").querySelector("button"); if (first) first.focus();
+  }
   function openLegend(anchor, cats, kinds) {
     const sw = (color, shape, key, glyph) => { const clip = clipFor(shape); return '<span class="lg-mk" style="background:' + esc(color) + (clip ? ";clip-path:" + clip : "") + '">' + (glyph ? '<svg viewBox="0 0 24 24">' + GLYPHS[glyph] + "</svg>" : key && DATA.icons.icons[key] ? '<img src="' + iconDataUrl(key, 40) + '" alt="">' : "") + "</span>"; };
     showMenu(anchor, () => '<div class="menu-title">' + esc(L("legend")) + "</div>" +
@@ -1006,10 +1060,21 @@
       if (!words.every(w => hay.includes(w))) return null;
       return { it, score: name.startsWith(q) ? 0 : name.includes(q) ? 1 : 2 };
     }).filter(Boolean).sort((a, b) => a.score - b.score || (a.it.NAME || "").localeCompare(b.it.NAME || "")).slice(0, 8);
-    box.innerHTML = scored.length ? scored.map(({ it }) => {
+    // happenings and tours are found too
+    const extra = [];
+    const H = window.ETSHappenings, T = window.ETSTours;
+    if (H) H.list.forEach(h => { const hay = [h.name, h.tag, h.text].join(" ").toLowerCase(); if (words.every(w => hay.includes(w))) extra.push({ kind: "happening", id: h.id, name: h.name, sub: L("happening"), color: h.color }); });
+    if (T) T.list.filter(t => !T.isOpen || T.isOpen(t.id)).forEach(t => { const hay = [t.title, t.summary, t.intro].join(" ").toLowerCase(); if (words.every(w => hay.includes(w))) extra.push({ kind: "tour", id: t.id, name: t.title, sub: t.type === "trail" ? L("trail") : L("tour"), color: "" }); });
+    const extraHtml = extra.slice(0, 5).map(x => '<button type="button" role="option" class="result" data-x="' + x.kind + '" data-xid="' + esc(x.id) + '"><span class="m-dot' + (x.kind === "tour" ? " m-route" : "") + '" style="background:' + esc(x.color || "var(--accent)") + '"></span><span><b>' + esc(x.name) + "</b><small>" + esc(x.sub) + "</small></span></button>").join("");
+    box.innerHTML = scored.length || extra.length ? scored.map(({ it }) => {
       const sub = [kindLabel(it), (DATA.cats.get(it.CATEGORY) || {}).LABEL, it.PART_OF && DATA.byId.get(it.PART_OF) ? L("partOf") + " " + DATA.byId.get(it.PART_OF).NAME : ""].filter(Boolean).join(" · ");
       return '<button type="button" role="option" class="result" data-id="' + esc(it.ID) + '"><span class="m-dot" style="background:' + esc(colorFor(it)) + '"></span><span><b>' + esc(it.NAME || it.ID) + "</b>" + (sub ? "<small>" + esc(sub) + "</small>" : "") + "</span></button>";
-    }).join("") : '<div class="empty">' + esc(L("noResults")) + "</div>";
+    }).join("") + extraHtml : '<div class="empty">' + esc(L("noResults")) + "</div>";
+    box.querySelectorAll("[data-x]").forEach(b => b.addEventListener("click", () => {
+      closeMenus(); $("searchInput").blur();
+      if (b.dataset.x === "happening") { const h = window.ETSHappenings.list.find(x => x.id === b.dataset.xid); if (h) window.ETSHappenings.openOne(h); }
+      else window.ETSTours.overview(b.dataset.xid);
+    }));
     box.querySelectorAll("[data-id]").forEach(b => b.addEventListener("click", () => {
       const it = DATA.byId.get(b.dataset.id); closeMenus(); $("searchInput").blur(); goTo(it);
     }));
@@ -1076,7 +1141,7 @@
     get map() { return map; },
     onStyle(f) { STYLE_HOOKS.push(f); if (map && STYLE_READY) { try { f(map); } catch (e) { warn(e.message); } } },   // a feature that loads after the style arrived still gets its layers
     setPeek(px) { const sh = $("sheet"); if (px) sh.style.setProperty("--sheet-peek", px + "px"); else sh.style.removeProperty("--sheet-peek"); },
-    setTouring(on) { document.body.classList.toggle("touring", !!on); if (on) { closeMenus(); OPEN_GROUP = null; refreshMarkerVisibility(); } },
+    setTouring(on) { touringNow = !!on; cluster(); document.body.classList.toggle("touring", !!on); if (on) { closeMenus(); OPEN_GROUP = null; refreshMarkerVisibility(); } },
     openCard, closeMenus, boundsOf, sheetPad, desktop, getCSV, getJSON, dataUrl, iconDataUrl, clipFor, GLYPHS, FIXED, ICON, openLightbox, loadFeature: n => loadFeature(n),
     addFilter(f) { FILTERS.push(f); }, refreshMarkers: () => refreshMarkerVisibility(), markerEl: id => (MARKERS.get(id) || {}).el,
     setHome(f) { HOME_OVERRIDE = f; }, goHome: a => goHome(a), set noRealPlace(v) { NO_REAL_PLACE = !!v; }, get noRealPlace() { return NO_REAL_PLACE; },
@@ -1104,13 +1169,16 @@
     initTheme();
     await loadAll();
     applyLook();
+    if (window.ETS_LIB) await window.ETS_LIB;       // the map library, from this site or unpkg
     makeMap();
     // Extras load only when the site has something for them (and never in safe mode)
     // The extras are fetched all at once, while the markers are drawn, instead of one after another.
     // An indoor plan comes first because it decides which floor's markers show and whether Near Me applies.
     let extras = Promise.resolve();
+    if (SAFE) await loadLater();
     if (!SAFE) {
       if (DATA.map.backdrop) await loadFeature("interiors");
+      await loadLater();
       const want = [];
       if (DATA.happenings.length) want.push("happenings");
       if (DATA.routes.length) want.push("tours");
@@ -1122,6 +1190,7 @@
     renderControls();
     wireSheet();
     buildMarkers();
+    const skip = $("skipList"); if (skip) { skip.textContent = L("skipList"); skip.addEventListener("click", e => { e.preventDefault(); openPlaceList(); }); }
     await extras;
     renderControls();
     document.addEventListener("click", e => {

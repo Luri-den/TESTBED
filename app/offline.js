@@ -7,7 +7,7 @@
   const { esc, L } = C;
   C.words({
     offTitle: "Save for Offline Use", offText: "Keep a copy of this map on your phone so it works with no signal: places, photos, audio, tours and your passport.",
-    offStreet: "The street map itself needs a connection. The Aerial and Topographic maps can be saved for this area.",
+    offStreet: "Good to know: with no signal, the street map's background (roads and names) won't show. Your places, photos, audio, tours and passport will. The Aerial and Topographic maps can be saved for this area, so switch to one of those when you're offline.",
     offTiles: "Also save the Aerial and Topographic maps (about {n} pictures)", offSave: "Save It", offSaving: "Saving… {done} of {total}", offDone: "Saved. This map now works offline.",
     offSome: "Saved, but {n} files couldn't be reached.", offRemove: "Remove the Saved Copy", offRemoved: "The saved copy was removed.", offNo: "This browser can't save maps for offline use."
   });

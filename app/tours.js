@@ -38,7 +38,7 @@
   const ROUTES = C.DATA.routes.map(f => {
     const p = f.properties, coords = lineCoords(f.geometry);
     const type = String(p.TYPE || "tour").toLowerCase();
-    const stops = (Array.isArray(p.STOPS) ? p.STOPS : []).map(s => ({ item: C.DATA.byId.get(s.ITEM), id: s.ITEM, note: s.NOTE || "", vehicle: s.VEHICLE || "" }))
+    const stops = (Array.isArray(p.STOPS) ? p.STOPS : []).map(s => ({ item: C.DATA.byId.get(s.ITEM), id: s.ITEM, note: s.NOTE || "", vehicle: s.VEHICLE || "", audio: s.AUDIO || "", transcript: s.TRANSCRIPT || "" }))
       .filter(s => { if (s.item) return true; C.warn("Route " + p.ID + " stops at " + s.id + ", which isn't on the map. That stop is skipped."); return false; });
     return {
       id: String(p.ID), type, title: p.TITLE || p.NAME || p.ID, intro: p.INTRO || "", summary: p.SUMMARY || "", category: p.CATEGORY || "",
@@ -253,7 +253,8 @@
         nextLine = (next.item.NAME || next.id) + " · " + dist(d) + ", " + L("minShort", { m: Math.max(1, Math.round(d / 1609.344 * PACE[m])) });
       } else nextLine = next.item.NAME || next.id;
     }
-    const media = (C.DATA.media.get(it.ID) || []).filter(x => /^audio$/i.test(x.KIND || ""));
+    // a stop's own audio clip comes first, then the place's
+    const media = (s.audio ? [{ FILE: s.audio, CAPTION: L("listen"), TRANSCRIPT: s.transcript, KIND: "audio" }] : []).concat((C.DATA.media.get(it.ID) || []).filter(x => /^audio$/i.test(x.KIND || "")));
     const photo = (C.DATA.media.get(it.ID) || []).find(x => (x.KIND || "photo").toLowerCase() === "photo" && x.FILE);
     const text = s.note || it.BLURB || it.TEXT || "";
     const html =
@@ -279,6 +280,7 @@
     }, "peek");
     if (!keepCamera && it.hasPos && C.map) { stopSpin(); C.map.easeTo({ center: [it.lng, it.lat], zoom: Math.max(C.map.getZoom(), 16), padding: { top: 110, bottom: Math.min(innerHeight * 0.62, 360) + 20, left: C.desktop() ? 460 : 0, right: 0 }, duration: C.REDUCED ? 0 : 700 }); }
     document.dispatchEvent(new CustomEvent("ets:tourstop", { detail: { tour: t.id, stop: ACTIVE.i, item: it.ID } }));
+    C.store.set("tour_progress", { tour: t.id, stop: ACTIVE.i, t: Date.now() });      // so a reload can pick up here
   }
   /* ---------- the travel animation: a little vehicle rides the route to the next stop ---------- */
   let TRAVEL = 0, vehicleMarker = null;
@@ -367,12 +369,14 @@
   }
   function finish() {
     const t = ACTIVE.t;
+    C.store.set("tour_progress", null);
     document.dispatchEvent(new CustomEvent("ets:tourdone", { detail: { tour: t.id } }));   // the passport listens for this
     C.setPeek(240);
     C.openSheetHtml('<div class="tour-done"><div class="td-badge">' + ROUTE_ICON + '</div><h2 class="c-title">' + esc(L("finished")) + "</h2><p>" + esc(L("finishedText")) + '</p><button type="button" class="act act-main" data-end="1"><span>' + esc(L("endTour")) + "</span></button></div>",
       body => body.querySelector("[data-end]").addEventListener("click", () => endTour()), "peek");
   }
   function endTour(quiet) {
+    if (!quiet) C.store.set("tour_progress", null);
     stopSpin(); TRAVEL++; clearVehicle();
     ACTIVE = null; PREVIEW = null;
     C.setTouring(false); C.setPeek(null);
@@ -386,6 +390,41 @@
   // ?tour=ID opens the tour's overview
   const want = C.Q.get("tour");
   if (want) C.onStart(() => { const t = byId(want); if (t && isOpen(t)) overview(t); else C.warn("The link asked for tour " + want + ", which isn't open right now."); });
-  window.ETSTours = { list: TOURS, has: id => !!byId(id), start, openList, end: endTour, get active() { return ACTIVE && { tour: ACTIVE.t.id, stop: ACTIVE.i }; } };
+  /* ---------- Resume Tour after a reload or a dropped connection ---------- */
+  C.words({ resumeTour: "Resume Tour", resumeText: "{title}, stop {n} of {total}", arrived: "You've arrived at {name}", goToStop: "Go to Stop {n}" });
+  const saved = C.store.get("tour_progress", null);
+  if (saved && Date.now() - saved.t < 12 * 3600e3 && !C.Q.get("tour") && !C.Q.get("place") && !C.Q.get("happening")) C.onStart(() => {
+    const t = byId(saved.tour); if (!t || !isOpen(t) || !t.stops.length) return;
+    const n = Math.min(saved.stop, t.stops.length - 1);
+    const el = document.createElement("div"); el.className = "resume-chip"; el.setAttribute("role", "status");
+    el.innerHTML = ROUTE_ICON + '<span><b>' + esc(L("resumeTour")) + "</b><small>" + esc(L("resumeText", { title: t.title, n: n + 1, total: t.stops.length })) + '</small></span><button type="button" class="act act-main">' + esc(L("resumeTour")) + '</button><button type="button" class="rc-x" aria-label="' + esc(L("close")) + '">✕</button>';
+    el.querySelector(".act").addEventListener("click", () => { el.remove(); start(t.id); if (n) showStop(n); });
+    el.querySelector(".rc-x").addEventListener("click", () => { el.remove(); C.store.set("tour_progress", null); });
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 20000);
+  });
+
+  /* ---------- Arrival cues: with Near Me on, the tour says when the visitor reaches a stop ---------- */
+  const ARRIVE = parseFloat(C.SITE.TOUR_ARRIVE) || 30;           // meters
+  const arrivedAt = new Set();
+  function onFix(f) {
+    if (!ACTIVE || !f || !window.ETSNear) return;
+    const t = ACTIVE.t;
+    [ACTIVE.i, ACTIVE.i + 1].forEach(i => {
+      const s = t.stops[i]; if (!s || !s.item.hasPos || arrivedAt.has(t.id + ":" + i)) return;
+      if (window.ETSNear.distance([f.lng, f.lat], [s.item.lng, s.item.lat]) > ARRIVE + Math.min(f.acc || 0, 30)) return;
+      arrivedAt.add(t.id + ":" + i);
+      if (navigator.vibrate && !C.REDUCED) { try { navigator.vibrate([40, 60, 40]); } catch (e) { /* fine */ } }
+      const el = document.createElement("div"); el.className = "arrive-toast"; el.setAttribute("role", "status");
+      el.innerHTML = "<span>" + esc(L("arrived", { name: s.item.NAME || s.id })) + "</span>" + (i !== ACTIVE.i ? '<button type="button" class="act act-main">' + esc(L("goToStop", { n: i + 1 })) + "</button>" : "");
+      const b = el.querySelector("button"); if (b) b.addEventListener("click", () => { el.remove(); showStop(i); });      // tours still only move on when the visitor chooses
+      document.querySelectorAll(".arrive-toast").forEach(x => x.remove()); document.body.appendChild(el); setTimeout(() => el.remove(), 10000);
+      if (i === ACTIVE.i && C.yes(C.SITE.TOUR_AUTOPLAY)) { const au = document.querySelector("#sheetBody [data-audio]"); if (au) au.click(); }   // play this stop's audio on arrival, if the site wants that
+    });
+  }
+  let unsubNear = null;
+  document.addEventListener("ets:tourstop", () => { if (!unsubNear && window.ETSNear) unsubNear = window.ETSNear.on(onFix); });
+
+  window.ETSTours = { list: TOURS, has: id => !!byId(id), isOpen: id => { const t = byId(id); return !!t && isOpen(t); }, overview: id => overview(byId(id)), start, openList, end: endTour, get active() { return ACTIVE && { tour: ACTIVE.t.id, stop: ACTIVE.i }; } };
   C.renderControls();
 })();

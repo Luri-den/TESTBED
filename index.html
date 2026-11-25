@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#0B7A75">
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<link rel="stylesheet" href="app/vendor/maplibre-gl.css">
 <link rel="stylesheet" href="app/style.css">
 </head>
 <body>
@@ -16,6 +17,7 @@
   Add ?embed=1 to the address to show it inside another website, ?debug=1 to see problems,
   ?safe=1 to turn off animations and extras.
 -->
+<a href="#" class="skip" id="skipList">Skip to the List of Places</a>
 <div id="map" aria-label="Map"></div>
 
 <div id="ui">
@@ -46,7 +48,14 @@
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <div id="debug" class="debug" hidden></div>
 
-<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<!-- the map library: this site's own copy if it has one (app/vendor/), otherwise from unpkg -->
+<script>
+  // the map library: this site's own copy if it has one (app/vendor/), otherwise from unpkg.com
+  window.ETS_LIB = new Promise(done => {
+    const add = (src, next) => { const s = document.createElement("script"); s.src = src; s.onload = done; s.onerror = next; document.head.appendChild(s); };
+    add("app/vendor/maplibre-gl.js", () => add("https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js", done));
+  });
+</script>
 <script src="app/core.js"></script>
 </body>
 </html>
