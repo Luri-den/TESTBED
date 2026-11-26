@@ -18,8 +18,8 @@
     [["stamp", "Ranks", "Each rank has three stars, earned by finishing its tasks."], ["task", "Tasks", "Things to do: open a story, finish a tour, visit three downtown places."], ["prize", "Prizes", "Won at a set number of stars, or by finding set places. Shows a code to a vendor."]].forEach(([type, title, note]) => {
       const list = rows().filter(r => r.TYPE === type);
       const sec = ui.section(side, title, { badge: String(list.length) });
-      ui.note(sec, note);
-      ui.list(sec, list.map(r => ({ id: r.ID, title: r.TITLE || r.ID, sub: subFor(r), color: type === "prize" ? "#B45309" : type === "task" ? "#5B6670" : "var(--accent)", on: r.ID === selId })), { empty: "None yet.", onPick: select });
+      if (list.length) ui.note(sec, note);
+      ui.list(sec, list.map(r => ({ id: r.ID, title: r.TITLE || r.ID, sub: subFor(r), color: type === "prize" ? "#B45309" : type === "task" ? "#5B6670" : "var(--accent)", on: r.ID === selId })), { empty: "None yet.", teach: type, onPick: select });
       ui.buttons(sec, [{ text: "+ New " + KIND[type], onClick: () => create(type) }]);
     });
     const st = ui.section(side, "Passport Settings", { open: false });

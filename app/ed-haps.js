@@ -73,7 +73,7 @@
       const sec = ui.section(side, STATE_NAME[st], { badge: String(list.length), open: st !== "ended" && st !== "hidden" });
       ui.list(sec, list.map(r => ({ id: r.ID, title: r.NAME || r.ID, sub: describe(r) + (r.FOLDER ? " · Own map" : ""), color: r.COLOR || "#0B7A75", on: r.ID === selId })), { onPick: select });
     });
-    if (!rows().length) ui.note(side, "Nothing yet. Press New Happening.");
+    if (!rows().length) ui.teach(side, "happenings");
   }
   function monthView(side) {
     const now = new Date();

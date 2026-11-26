@@ -54,7 +54,7 @@
         if (!q && filter === "all" || ms.length) ms.forEach(m => row(m, true));
       });
       if (filter !== "all" || q) D.items.filter(i => i.PART_OF && match(i) && !rows.some(r => r.id === i.ID)).forEach(i => row(i, true));
-      ui.list(listBox, rows, { empty: D.items.length ? "Nothing matches." : "No items yet. Press Add a Place, then tap the map where it goes.", onPick: id => selectItem(D.byId.get(id), true) });
+      ui.list(listBox, rows, { empty: D.items.length ? "Nothing matches." : "No items yet. Press Add a Place, then tap the map where it goes.", teach: D.items.length ? "" : "items", onPick: id => selectItem(D.byId.get(id), true) });
     }
     drawList();
     if (!D.items.length && !ED.SAMPLE) { ui.note(side, "New to this? Look around a made-up sample town first. Nothing you do there touches your map."); ui.buttons(side, [{ text: "Look at the Sample", onClick: () => { location.href = "edit.html?sample=demo"; } }]); }
@@ -62,7 +62,7 @@
 
     const cs = ui.section(side, "Categories", { open: false, badge: String(D.cats.size) });
     ui.note(cs, "Each place can belong to one category. A category sets the marker's color, icon and shape, and gets its own chip on the map.");
-    ui.list(cs, [...D.cats.values()].map(c => ({ id: c.CODE, title: c.LABEL || c.CODE, sub: D.items.filter(i => i.CATEGORY === c.CODE).length + " items" + (ED.yes(c.RANKED) ? " · Ranked" : ""), color: c.COLOR, icon: c.ICON ? ED.iconUrl(c.ICON, 40) : "" })), { empty: "No categories yet.", onPick: code => editCategory(code) });
+    ui.list(cs, [...D.cats.values()].map(c => ({ id: c.CODE, title: c.LABEL || c.CODE, sub: D.items.filter(i => i.CATEGORY === c.CODE).length + " items" + (ED.yes(c.RANKED) ? " · Ranked" : ""), color: c.COLOR, icon: c.ICON ? ED.iconUrl(c.ICON, 40) : "" })), { empty: "No categories yet.", teach: "categories", onPick: code => editCategory(code) });
     ui.buttons(cs, [{ text: "+ New Category", onClick: () => newCategory() }]);
   }
 

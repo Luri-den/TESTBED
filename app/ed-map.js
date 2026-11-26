@@ -202,7 +202,7 @@
     const list = mapData().overlays || [];
     const sec = ui.section(side, "Old Maps", { badge: String(list.length), open: selOverlay >= 0 || !list.length });
     ui.note(sec, "Scanned old maps laid over today's map. Each one is pinned by its four corners. Big pictures are shrunk here to about 4,000 pixels.");
-    ui.list(sec, list.map((o, i) => ({ id: String(i), title: o.name || o.file, sub: (o.hidden ? "Hidden · " : "") + o.file + (o.offline ? " · Saved for offline" : ""), color: "#8B6F47", on: i === selOverlay })), { empty: "No old maps yet.", onPick: id => { selOverlay = +id; outlineEdit = false; refresh(); ED.rerender(); fitOverlay(); } });
+    ui.list(sec, list.map((o, i) => ({ id: String(i), title: o.name || o.file, sub: (o.hidden ? "Hidden · " : "") + o.file + (o.offline ? " · Saved for offline" : ""), color: "#8B6F47", on: i === selOverlay })), { empty: "No old maps yet.", teach: "oldmaps", onPick: id => { selOverlay = +id; outlineEdit = false; refresh(); ED.rerender(); fitOverlay(); } });
     ui.file(sec, "Add an Old Map", "image/*", files => addOverlay(files[0]), "JPEG, PNG or WebP.");
     const o = list[selOverlay];
     if (!o) return;

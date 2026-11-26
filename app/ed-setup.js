@@ -157,6 +157,9 @@
     outline: { title: "Area Outline", text: "The line around your town or county. Change its style, color and width, or find a different place.", panel: "map", sec: /^Area Outline/ },
     preview: { title: "Preview", text: "Opens the map the way visitors will see it, with your unpublished changes.", el: "edPreview" },
     undo: { title: "Undo", text: "Takes back the last change. It goes back up to 60 steps.", el: "edUndo" },
+    name: { title: "The Map's Name", text: "Shown in the search bar, the browser tab and the welcome screen.", panel: "look", sec: /^Name, Badge/ },
+    about: { title: "About This Map", text: "Say who made the map, why, and how to send a memory or a correction. Visitors open it from the About button.", panel: "look", sec: /^About This Map/ },
+    photo: { title: "Photos", text: "Open a place, then add a photo under Photos. The first photo is the cover on its card.", panel: "items", photo: true },
     publish: { title: "Publish", text: "Nothing you do here is on the website until you press Publish. It checks the data first, then sends it to GitHub or makes a ZIP.", el: "edPublish" }
   };
   const MAKE = ["place", "group", "story", "photospot", "tour", "trail", "line", "happening", "oldmap", "interior"];
@@ -173,6 +176,11 @@
       if (t.tab) el = document.querySelector('#edTabs [data-p="' + t.panel + '"]');
       if (t.btn) el = findIn(document.getElementById("edSide"), "button", t.btn);
       if (t.sec) { const s = findIn(document.getElementById("edSide"), "summary", t.sec); if (s) { s.parentElement.open = true; el = s; } }
+      if (t.photo) {
+        const it = ED.data.items.find(i => i.LAT && (i.KIND || "place") !== "story");
+        if (!it) { ED.toast("Add a place first, then give it a photo.", 6000); el = findIn(document.getElementById("edSide"), "button", /^\+ Add a Place/); }
+        else { ED.select(it); const s = findIn(document.getElementById("edInsp"), "summary", /^Photos/); if (s) { s.parentElement.open = true; el = s; } }
+      }
       if (t.group || t.interior) {
         const it = ED.data.items.find(i => (i.KIND || "place") === "place" && !i.PART_OF && i.LAT);
         if (!it) { ED.toast("Add a place first. " + (t.group ? "Any place can become a group." : "Any place can have an interior."), 6000); el = findIn(document.getElementById("edSide"), "button", /^\+ Add a Place/); }
@@ -205,12 +213,49 @@
     bub.querySelector("[data-back]").addEventListener("click", () => { done(); openTutorial(store.get("tut_at", 0)); });
   }
 
+  /* ---------- starter templates: categories (with their looks) and a color to begin from ---------- */
+  const TEMPLATES = {
+    cemetery: { title: "Cemetery", text: "Graves, veterans, founders", color: "#334155", cats: [
+      ["Notable Graves", "#334155", "shield", "grave"], ["Veterans", "#1D4ED8", "flag1", "monument"], ["Founders and Pioneers", "#B45309", "circle", "grave"],
+      ["Chapels and Gates", "#7C3AED", "square", "church"], ["Unmarked and Lost", "#5B6670", "circle", "", "diagonal"]] },
+    downtown: { title: "Downtown Walking Tour", text: "History, food, shops, churches", color: "#0B7A75", cats: [
+      ["History", "#1D4ED8", "circle", "courthouse"], ["Food and Drink", "#C2410C", "circle", "store"], ["Shops", "#7C3AED", "square", "store"],
+      ["Churches", "#15803D", "circle", "church"], ["Public Buildings", "#334155", "shield", "courthouse"]] },
+    museum: { title: "Museum or Library", text: "Exhibits, sites, partners, programs", color: "#BE185D", cats: [
+      ["Exhibits", "#BE185D", "circle", "monument"], ["Historic Sites", "#1D4ED8", "circle", "house"], ["Partner Places", "#15803D", "square", "store"],
+      ["Little Free Libraries", "#B45309", "diamond", "school"], ["Programs", "#7C3AED", "star", "generic"]] },
+    county: { title: "County History", text: "Towns, schools, churches, mills, rails", color: "#B45309", cats: [
+      ["Towns", "#0B7A75", "circle", "house"], ["Schools", "#1D4ED8", "square", "school"], ["Churches", "#7C3AED", "circle", "church"], ["Cemeteries", "#334155", "shield", "grave"],
+      ["Mills and Industry", "#C2410C", "hexagon", "mill"], ["Railroads and Roads", "#B45309", "circle", "train"], ["Lost Places", "#5B6670", "circle", "", "stripes"]] }
+  };
+  function templatePicker() {
+    const D = ED.data, mine = S("TUT_TEMPLATE");
+    if (D.items.length || (D.cats.size && !mine)) return "";
+    return '<span class="ed-label">What Kind of Map? (Optional)</span><p class="ed-note">A starting point: it makes fitting categories, each with its own color, shape and icon. Change any of it later.</p><div class="tut-tpls">' +
+      Object.entries(TEMPLATES).map(([k, t]) => '<button type="button" data-tpl="' + k + '"' + (mine === k ? ' aria-pressed="true"' : "") + '><span class="tut-tpl-mks">' + t.cats.slice(0, 3).map(x => markerHtml({ color: x[1], shape: x[2], icon: x[3], fill: x[4] }, 26)).join("") + "</span><b>" + esc(t.title) + "</b><small>" + esc(t.text) + "</small></button>").join("") +
+      '<button type="button" data-tpl=""' + (mine ? "" : ' aria-pressed="true"') + '><span class="tut-tpl-mks"></span><b>Start Blank</b><small>Make your own categories</small></button></div>';
+  }
+  function useTemplate(key) {
+    const t = TEMPLATES[key], icons = (ED.data.icons && ED.data.icons.icons) || {};
+    ED.change("categories.csv", f => {
+      f.rows = !t ? [] : t.cats.map(([label, color, shape, icon, fill], i) => Object.assign(Object.fromEntries(f.cols.map(x => [x, ""])), {
+        CODE: label.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 6) + (i < 10 ? "" : i), LABEL: label, COLOR: color, SHAPE: shape, ICON: icons[icon] ? icon : (icons.generic ? "generic" : ""), FILL: fill || "" }));
+    }, t ? "template " + t.title : "start blank");
+    putSite({ TUT_TEMPLATE: key || "" }, "template");
+    if (t) ED.setSite("BAR_COLOR", t.color, "theme color");
+    catCode = null; store.set("tut_cat", null);
+  }
+  ED.TEMPLATES = TEMPLATES;
+
   /* ---------- the steps ---------- */
   const STEPS = [
     { part: "Your Area", title: "Let's Set Up Your Map", box: false,
       body: () => "<p>This tutorial builds your map with you, one choice at a time. Everything can be changed later, and the <b>Help</b> button at the top brings this back any time.</p>" +
-        '<label class="ed-field"><span class="ed-label">What\'s It Called?</span><input class="ed-input" data-name value="' + esc(S("PLACE")) + '" placeholder="Union County, or Liberty Public Library"><small class="ed-help">A town, county or organization. It shows in the search bar and on the welcome screen.</small></label>',
-      wire: m => setTimeout(() => m.querySelector("[data-name]").focus(), 30),
+        '<label class="ed-field"><span class="ed-label">What\'s It Called?</span><input class="ed-input" data-name value="' + esc(S("PLACE")) + '" placeholder="Union County, or Liberty Public Library"><small class="ed-help">A town, county or organization. It shows in the search bar and on the welcome screen.</small></label>' + templatePicker(),
+      wire: (m, redraw) => {
+        setTimeout(() => m.querySelector("[data-name]").focus(), 30);
+        m.querySelectorAll("[data-tpl]").forEach(b => b.addEventListener("click", () => { const nm = m.querySelector("[data-name]").value; useTemplate(b.dataset.tpl); redraw(); const n = document.querySelector(".ed-modal [data-name]"); if (n) n.value = nm; }));
+      },
       next: m => { const v = m.querySelector("[data-name]").value.trim(); if (!v) { ED.toast("Type a name first."); return false; } if (v !== S("PLACE")) ED.setSite("PLACE", v, "name"); if (!S("TIME_ZONE")) ED.setSite("TIME_ZONE", Intl.DateTimeFormat().resolvedOptions().timeZone, "time zone"); } },
 
     { part: "Your Area", title: "Where Is It?",
@@ -451,7 +496,7 @@
       });
     });
     const back = document.getElementById("edModal");
-    back.classList.add("su-peek", "tut-on");
+    back.classList.add("su-peek", "tut-on"); document.body.classList.add("tut-running");
     showBox();
     if (s.fitTo === "box") fitBox(animateFit); else if (area) fit(area, animateFit);
   }
@@ -477,7 +522,7 @@
   function closeTutorial(how) {
     open_ = false; showBox();
     if (closeCard) { closeCard(); closeCard = null; }
-    const b = document.getElementById("edModal"); b.classList.remove("su-peek", "tut-on", "tut-hidden");
+    const b = document.getElementById("edModal"); b.classList.remove("su-peek", "tut-on", "tut-hidden"); document.body.classList.remove("tut-running");
     if (how === "done") { store.set("setup_done", 1); store.set("tut_at", null); store.set("tut_place", null); store.set("tut_cat", null); }
     else if (how === false) { try { sessionStorage.setItem(ED.key("tut_later"), "1"); } catch (e) { /* fine */ } }
     ED.rerender && ED.rerender();
@@ -492,7 +537,12 @@
     ED.modal("<h2>Help</h2><p>Take the tutorial again, jump to one part of it, or pick a topic and press Show Me.</p>" +
       '<div class="ed-btnrow"><button type="button" class="ed-btn ed-primary" data-start>Start the Tutorial From the Beginning</button></div><div class="ed-btnrow tut-parts">' + partBtns + "</div>" +
       '<input class="ed-input" data-hq placeholder="Search the topics: tour, photo, passport…"><div class="tut-cards help">' + keys.map(k => '<div class="tut-card" data-k="' + k + '"><b>' + esc(T[k].title) + "</b><p>" + esc(T[k].text) + '</p><button type="button" class="ed-btn ed-small" data-show="' + k + '">Show Me</button></div>').join("") + "</div>" +
+      "<h3>Words Used Here</h3><dl class=\"tut-gloss\">" + GLOSSARY.map(([w, d]) => "<dt>" + esc(w) + "</dt><dd>" + esc(d) + "</dd>").join("") + "</dl>" +
+      '<h3>Settings</h3><label class="ed-toggle"><input type="checkbox" data-adv' + (ED.advanced() ? " checked" : "") + '><span class="ed-switch"></span><span class="ed-tl"><b>Advanced Settings</b><small>Off (Basic): fonts, wording, button layout, embed code and other less-used settings are tucked away. Anything a place already uses still shows.</small></span></label>' +
+      '<label class="ed-toggle"><input type="checkbox" data-gs' + (store.get("gs_hidden", 0) ? "" : " checked") + '><span class="ed-switch"></span><span class="ed-tl"><b>Getting Started List</b><small>The checklist in the corner of the map.</small></span></label>' +
       '<p class="ed-note">The full guide is GUIDE.md in the site\'s files.</p>', (m, close) => {
+      m.querySelector("[data-adv]").addEventListener("change", e => ED.setAdvanced(e.target.checked));
+      m.querySelector("[data-gs]").addEventListener("change", e => { store.set("gs_hidden", e.target.checked ? null : 1); store.set("gs_collapsed", null); checklist(); });
       m.querySelector("[data-start]").addEventListener("click", () => { close(); openTutorial(0); });
       m.querySelectorAll("[data-part]").forEach(b => b.addEventListener("click", () => { close(); openTutorial(STEPS.findIndex(s => s.part === PARTS[+b.dataset.part])); }));
       m.querySelectorAll("[data-show]").forEach(b => b.addEventListener("click", () => { close(); showMe(b.dataset.show); }));
@@ -500,11 +550,59 @@
     }, { wide: true });
   }
   ED.openHelp = openHelp;
+  const GLOSSARY = [
+    ["Place", "Anything with a spot on the map: a building, a grave, a business, a marker."],
+    ["Category", "A kind of place, like Churches. A filter chip for visitors, and it holds the marker's look."],
+    ["Group", "One marker that holds other places, like Downtown or a cemetery. It opens when tapped."],
+    ["Story", "A piece of history, with or without one spot. Stories can be told in order as a series."],
+    ["Photo Spot", "A place to stand and take a picture, or a then-and-now view."],
+    ["Tour", "Stops in order that visitors go through one by one, with directions and arrival alerts."],
+    ["Trail", "A path visitors can follow on their own. No stops needed."],
+    ["Line", "Just a line on the map, like an old railroad or a vanished road."],
+    ["Happening", "Anything with a date: a festival, a walk, open hours."],
+    ["Interior", "A floor plan inside a building, opened with Step Inside."],
+    ["Old Map", "A scanned map laid over today's map, with a then-and-now slider."],
+    ["Passport", "The optional game: stamps for places, stars for tasks, ranks and prizes."],
+    ["Visitor Area", "The red box visitors can't scroll out of. Near Me only works inside it."],
+    ["Outline", "The line around your town or county."],
+    ["Publish", "Puts your changes on the website. Until then they're only in this browser."]
+  ];
+
+  /* ---------- Getting Started: a checklist in the corner of the map that stays until it's done ---------- */
+  const GS = [
+    ["name", "Name Your Map", () => !!S("PLACE")],
+    ["outline", "Outline Your Area", () => !!(ED.data.map && ED.data.map.outline) || !!boundsNow()],
+    ["place", "Add 5 Places", () => placesOnMap() >= 5, () => Math.min(5, placesOnMap()) + " of 5"],
+    ["photo", "Add a Photo", () => ED.data.media.some(x => !/audio|video/i.test(x.KIND || ""))],
+    ["about", "Write the About Text", () => /\S/.test(S("EVENT_TEXT")) && !/^Tap a place\. Its card slides up/.test(S("EVENT_TEXT"))],
+    ["preview", "Preview It", () => !!store.get("did_preview", 0)],
+    ["publish", "Publish", () => !!store.get("did_publish", 0)]
+  ];
+  const placesOnMap = () => ED.data.items.filter(i => isFinite(parseFloat(i.LAT)) && isFinite(parseFloat(i.LONG))).length;
+  function checklist() {
+    let box = document.getElementById("edGS");
+    const off = ED.SAMPLE || ED.EVENT || store.get("gs_hidden", 0);
+    if (off) { if (box) box.remove(); return; }
+    if (!box) { box = document.createElement("div"); box.id = "edGS"; box.className = "ed-gs"; document.querySelector(".ed-mapwrap").appendChild(box); }
+    const done = GS.filter(g => g[2]()).length, collapsed = !!store.get("gs_collapsed", 0), all = done === GS.length;
+    const key = done + "|" + collapsed + "|" + GS.map(g => g[3] ? g[3]() : "").join();
+    if (box.dataset.k === key) return; box.dataset.k = key;
+    box.classList.toggle("collapsed", collapsed);
+    box.innerHTML = '<button type="button" class="ed-gs-head" aria-expanded="' + !collapsed + '"><b>' + (all ? "All Done" : "Getting Started") + '</b><span class="ed-gs-n">' + done + " of " + GS.length + '</span><span class="ed-gs-ch">' + (collapsed ? "▸" : "▾") + "</span></button>" +
+      '<div class="ed-gs-bar"><span style="width:' + Math.round(done / GS.length * 100) + '%"></span></div>' +
+      (collapsed ? "" : '<ul class="ed-gs-list">' + GS.map(([k, label, ok, sub]) => { const d = ok(); return '<li class="' + (d ? "done" : "") + '"><span class="ed-gs-tick" aria-hidden="true">' + (d ? "✓" : "") + "</span><span>" + esc(label) + (sub && !d ? " <small>(" + esc(sub()) + ")</small>" : "") + "</span>" + (d ? "" : '<button type="button" class="ed-btn ed-small" data-gs="' + k + '">Show Me</button>') + "</li>"; }).join("") + "</ul>" +
+        (all ? '<p class="ed-gs-done">Your map is ready to share.</p>' : "") + '<button type="button" class="ed-gs-hide">Hide This List</button>');
+    box.querySelector(".ed-gs-head").addEventListener("click", () => { store.set("gs_collapsed", collapsed ? null : 1); checklist(); });
+    box.querySelectorAll("[data-gs]").forEach(b => b.addEventListener("click", () => showMe(b.dataset.gs)));
+    const hide = box.querySelector(".ed-gs-hide"); if (hide) hide.addEventListener("click", () => { store.set("gs_hidden", 1); checklist(); ED.toast("Hidden. Bring it back from Help.", 4000); });
+  }
+  ED.checklist = checklist;
 
   /* ---------- start-up: the Help button, and the tutorial on a completely empty map ---------- */
   const wait = setInterval(() => {
     if (!ED.ready) return; clearInterval(wait);
     const hb = document.getElementById("edHelp"); if (hb) hb.addEventListener("click", openHelp);
+    checklist(); ED.onChange(checklist); addEventListener("focus", checklist); setInterval(checklist, 3000);
     if (ED.SAMPLE || ED.EVENT) return;
     const D = ED.data;
     const empty = !D.items.length && !D.cats.size && !((D.routes && D.routes.features) || []).length && !D.happenings.length && !(D.map && D.map.outline);

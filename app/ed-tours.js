@@ -56,7 +56,7 @@
     ui.list(side, routes().map(f => {
       const p = f.properties, n = (p.STOPS || []).length;
       return { id: p.ID, title: p.TITLE || p.ID, sub: [typeName(p.TYPE), n ? n + " stops" : "", coordsOf(f).length > 1 ? miles(f) + " mi" : "No line yet", String(p.AVAILABILITY).toLowerCase() === "event" ? "During a happening" : ""].filter(Boolean).join(" · "), color: p.COLOR || "#0B7A75", on: p.ID === selId };
-    }), { empty: "No tours yet. Press New Tour.", onPick: id => select(id, true) });
+    }), { empty: "No tours yet. Press New Tour.", teach: "tours", onPick: id => select(id, true) });
     redrawLines();
   }
   function create(type) {

@@ -390,7 +390,7 @@
     ED.refreshMarkers();
   };
   function setParam(k, v) { const u = new URL(location.href); if (v == null) u.searchParams.delete(k); else u.searchParams.set(k, v); return u.toString(); }
-  function rerender() { const side = $("edSide"); const top = side.scrollTop; side.innerHTML = ""; PANELS[current].render(side); side.scrollTop = top; }
+  function rerender() { const side = $("edSide"); const top = side.scrollTop; side.innerHTML = ""; PANELS[current].render(side); modeSwitch(side); side.scrollTop = top; }
   ED.rerender = rerender;
   ED.current = () => current;
   // The inspector (right column on a computer; a sheet over the map on a phone)
@@ -400,7 +400,7 @@
     const box = $("edInsp");
     if (!INSP) { box.hidden = true; document.body.classList.remove("ed-has-insp"); return; }
     const top = box.scrollTop; box.hidden = false; document.body.classList.add("ed-has-insp"); box.innerHTML = "";
-    INSP(box); box.scrollTop = top;
+    INSP(box); modeSwitch(box); box.scrollTop = top;
   }
   ED.rerenderInspector = rerenderInspector;
   function closeInspector() { INSP = null; rerenderInspector(); }
@@ -411,11 +411,99 @@
   // Form pieces. Each one takes a label, the current value, a change handler and plain-language help.
   const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
   ED.h = h;
+  /* ---------- teaching: Basic and Advanced, the ? beside each section, and empty panels that explain themselves ---------- */
+  let ADVANCED = false; try { ADVANCED = localStorage.getItem(KEY("ed_advanced")) === "1"; } catch (e) { /* fine */ }
+  function applyMode() { document.body.classList.toggle("ed-basic", !ADVANCED); }
+  ED.advanced = () => ADVANCED;
+  ED.setAdvanced = on => { ADVANCED = !!on; try { localStorage.setItem(KEY("ed_advanced"), on ? "1" : "0"); } catch (e) { /* fine */ } applyMode(); rerender(); rerenderInspector(); };
+  const ADV = ["Arrange the Controls", "Fonts", "Wording", "Embed on Another Site", "More Options", "Inside This Place", "When and How It Shows", "Its Own Map", "Showing It"];
+  function isAdvanced(title) { if (title === "Passport and Check-In") return !yes((ED.data && ED.data.site && ED.data.site.PASSPORT) || ""); return ADV.includes(title); }
+  function modeSwitch(box) {
+    const n = box.querySelectorAll(".ed-adv").length;
+    if (!n) return;
+    const w = h("div", "ed-modesw", ADVANCED ? '<span>Showing every setting.</span><button type="button" class="ed-btn ed-small">Back to Basic</button>'
+      : "<span>" + n + " less-used setting" + (n > 1 ? "s are" : " is") + ' tucked away.</span><button type="button" class="ed-btn ed-small">Show Advanced Settings</button>');
+    w.querySelector("button").addEventListener("click", () => ED.setAdvanced(!ADVANCED));
+    box.appendChild(w);
+  }
+  const HELP = {
+    "Categories": "Kinds of places, like Churches or Food. Each one is a filter chip and a legend entry, and it holds the look: color, shape, icon or pattern. Every place in a category matches it. A single place can override the look in its own More Details.",
+    "Copy or Remove": "Duplicate makes a copy right beside it. Delete takes it off the map; Undo brings it back until you publish.",
+    "Members": "The places inside this group. Visitors see one marker until they tap it. Add places one by one, or Draw a Box around many at once.",
+    "Photos": "The first photo is the cover: it's the big picture on the card, and it can be the marker. Large photos are shrunk automatically so the map stays fast.",
+    "Audio and Video": "A recording plays from the card, like an oral history or a tour narration. Add a written transcript so everyone can follow it.",
+    "More Details": "The words on the card, plus website, phone, hours, years, sources and credit. Also where a single place can have its own icon, color or shape instead of its category's.",
+    "Passport and Check-In": "How visitors collect this place's stamp: by opening its card, scanning a QR sign there, or walking up to it. Major places are the ones the passport asks visitors to find.",
+    "Inside This Place": "An interior: a floor plan with rooms, opened from this place's card with Step Inside. Floor puts this place on a floor of a building's plan.",
+    "Notes": "For you and other editors only. Visitors never see notes.",
+    "When": "The dates and times it's on. Times are in the map's time zone. Repeating happenings can run weekly, monthly or yearly.",
+    "Where and What": "The places it lights up on the map, and a tour it can start. Tap places on the map to add them.",
+    "Its Own Map": "A big event can have its own map, with its own places and look, at its own link. It goes away when the happening is over.",
+    "Showing It": "Whether it shows a Soon chip ahead of time, and whether it's public or hidden for now.",
+    "Name, Badge and Colors": "The map's name, the little picture at the start of the search bar, and the theme color used for buttons, chips and highlights.",
+    "Arrange the Controls": "Which buttons visitors get and where they sit. Drag them onto the phone picture.",
+    "Fonts": "The lettering for headings and body text.",
+    "Welcome Screen": "What visitors see the first time they open the map: a plain or seasonal welcome, then a quick look at a few places.",
+    "Feature Switches": "Turn whole features on or off for visitors: the passport, old maps, aerial photos, Near Me and more.",
+    "About This Map": "The About button's page. Say who made the map, why, and how to share a memory or a correction.",
+    "Wording": "Every word on the visitor's map, so you can change \"Tours\" to \"Walks\" or translate it.",
+    "Embed on Another Site": "Code to paste into another website so the map shows inside a page there.",
+    "More Options": "Time zone, local aerial photos, tour camera settings, the tutorial, and Start Over.",
+    "Start View": "Where the map opens and how close in. Visitors who share a place's link start at that place instead.",
+    "Allowed Area": "The box visitors can't scroll out of. Near Me (their dot, distances and arrival alerts) only works inside it.",
+    "Area Outline": "The line around your town or county. Find it by name or draw it, then pick its style, color and width.",
+    "Old Maps": "Scanned old maps laid over today's map, pinned by four corners. Visitors slide between then and now.",
+    "Pinning": "Drag the four corner pins until streets and buildings line up with today's map. Turn the see-through slider down to check.",
+    "Indoor Plan": "The floor plans for this interior, pinned to the real building or shown on their own.",
+    "Passport Settings": "Whether ranks, stars and prizes show, and how check-ins work across the map.",
+    "When and How It Shows": "Whether the line shows all the time or only during a happening, plus its color, width and camera.",
+    "Try It, Copy or Remove": "Preview flies along the route like a visitor would. A Pretend Walk tests arrival alerts without going outside.",
+    "Stops": "The places a tour visits, in order. Each stop can have its own note, audio and vehicle.",
+    "The Line": "The route itself. Tap the map point by point; drag any dot to adjust it.",
+    "About It": "Its name, words and color, as visitors see them in the Tours list.",
+    "Ranks": "Titles visitors earn as they collect stamps and stars, like Explorer, then Historian.",
+    "Tasks": "Things to do that earn stars, like opening any story or finishing a tour.",
+    "Prizes": "Rewards with a code to show at your desk, won at a set number of stars or by finding set places."
+  };
+  function helpFor(title) { const t = String(title).replace(/\s*\(.*$/, "").replace(/:.*$/, "").trim(); return HELP[t] || HELP[Object.keys(HELP).find(k => t.startsWith(k))] || ""; }
+  const art = body => '<svg viewBox="0 0 96 72" width="96" height="72">' + body + "</svg>";
+  const TEACH = {
+    items: { title: "No places yet", text: "A place is anything with a spot on the map. Press <b>+ Add a Place</b> above, then tap the map. Or bring in a spreadsheet you already have.",
+      art: art('<rect x="8" y="10" width="80" height="54" rx="8" fill="var(--surface-2)"/><path d="M48 20c-7 0-12 5-12 12 0 9 12 20 12 20s12-11 12-20c0-7-5-12-12-12z" fill="var(--accent)"/><circle cx="48" cy="32" r="4.5" fill="#fff"/>') },
+    tours: { title: "No tours yet", text: "A <b>tour</b> is a walk or drive with stops in order. A <b>trail</b> is a path to follow anywhere. A <b>line</b> just shows on the map, like an old railroad. Press <b>+ New Tour</b> above to draw one.",
+      art: art('<rect x="8" y="10" width="80" height="54" rx="8" fill="var(--surface-2)"/><path d="M18 52 C30 20, 50 56, 62 30 S80 22, 80 22" fill="none" stroke="var(--accent)" stroke-width="3" stroke-dasharray="2 5" stroke-linecap="round"/><circle cx="18" cy="52" r="7" fill="var(--accent)"/><text x="18" y="55.5" font-size="9" text-anchor="middle" fill="#fff" font-weight="700">1</text><circle cx="47" cy="40" r="7" fill="var(--accent)"/><text x="47" y="43.5" font-size="9" text-anchor="middle" fill="#fff" font-weight="700">2</text><circle cx="80" cy="22" r="7" fill="var(--accent)"/><text x="80" y="25.5" font-size="9" text-anchor="middle" fill="#fff" font-weight="700">3</text>') },
+    happenings: { title: "Nothing scheduled", text: "A happening is anything with a date: a festival, a walk, open hours. While it's on, visitors see a <b>Now</b> chip and its places light up. Press <b>+ New Happening</b> above. With none, visitors never see any of it.",
+      art: art('<rect x="24" y="8" width="48" height="56" rx="7" fill="var(--surface-2)"/><rect x="24" y="8" width="48" height="14" rx="7" fill="var(--accent)"/><rect x="24" y="16" width="48" height="6" fill="var(--accent)"/><text x="48" y="50" font-size="22" text-anchor="middle" font-weight="800" fill="var(--text)">14</text>') },
+    oldmaps: { title: "No old maps yet", text: "Upload a scan of an old map, plat or aerial photo, then pin its four corners to today's streets. Visitors slide between then and now.",
+      art: art('<rect x="10" y="12" width="76" height="50" rx="4" fill="#E8DCC4"/><path d="M10 30h76M10 46h76M34 12v50M60 12v50" stroke="#B49C74" stroke-width="1.5"/><circle cx="10" cy="12" r="4" fill="var(--accent)"/><circle cx="86" cy="12" r="4" fill="var(--accent)"/><circle cx="10" cy="62" r="4" fill="var(--accent)"/><circle cx="86" cy="62" r="4" fill="var(--accent)"/>') },
+    categories: { title: "No categories yet", text: "A category is a kind of place, like Churches or Food. It's a filter chip for visitors, and it holds the look: color, shape and icon or pattern, so every place in it matches.",
+      art: art('<circle cx="24" cy="36" r="13" fill="#1D4ED8"/><path d="M48 23l13 13-13 13-13-13z" fill="#C2410C"/><path d="M72 23l12 22H60z" fill="#15803D"/>') },
+    stamp: { title: "No ranks yet", text: "Ranks are titles visitors earn, like Explorer, then Historian. Each has three stars, earned by finishing its tasks.",
+      art: art('<circle cx="48" cy="36" r="24" fill="none" stroke="var(--accent)" stroke-width="4" stroke-dasharray="4 3"/><path d="M48 24l4 8 9 1-7 6 2 9-8-5-8 5 2-9-7-6 9-1z" fill="var(--accent)"/>') },
+    task: { title: "No tasks yet", text: "Tasks earn stars: open any story, finish a tour, visit three churches. Visitors see them as a checklist in their passport.",
+      art: art('<rect x="22" y="10" width="52" height="54" rx="7" fill="var(--surface-2)"/><path d="M31 25l4 4 7-8M31 41l4 4 7-8" stroke="var(--accent)" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M48 26h18M48 42h18M48 56h18" stroke="var(--muted)" stroke-width="3" stroke-linecap="round"/>') },
+    prize: { title: "No prizes yet", text: "A prize shows a code once a visitor reaches a goal. They show it at your desk for a sticker, a book or a pie.",
+      art: art('<circle cx="48" cy="30" r="16" fill="#B45309"/><path d="M38 42l-6 20 10-5 6 8 4-21M58 42l6 20-10-5-6 8" fill="#B45309" opacity=".7"/><path d="M48 21l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" fill="#fff"/>') }
+  };
+  ED.TEACH = TEACH; ED.HELP = HELP;
+
   ED.ui = {
     section(parent, title, opts) {
       const d = h("details", "ed-sec"); d.open = !opts || opts.open !== false;
-      d.innerHTML = "<summary>" + esc(title) + (opts && opts.badge ? ' <span class="ed-pill">' + esc(opts.badge) + "</span>" : "") + "</summary>";
-      const body = h("div", "ed-sec-body"); d.appendChild(body); parent.appendChild(d); return body;
+      const help = helpFor(title);
+      d.innerHTML = "<summary>" + esc(title) + (opts && opts.badge ? ' <span class="ed-pill">' + esc(opts.badge) + "</span>" : "") + (help ? '<button type="button" class="ed-q" aria-label="What is ' + esc(title.replace(/\s*\(.*$/, "")) + '?" aria-expanded="false">?</button>' : "") + "</summary>";
+      const body = h("div", "ed-sec-body"); d.appendChild(body); parent.appendChild(d);
+      if (help) {
+        const q = d.querySelector(".ed-q"), box = h("div", "ed-qhelp", esc(help)); box.hidden = true; body.appendChild(box);
+        q.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); box.hidden = !box.hidden; q.setAttribute("aria-expanded", String(!box.hidden)); if (!box.hidden) d.open = true; });
+      }
+      // Basic mode tucks away the less-used settings, unless this item already uses them
+      if (isAdvanced(title) && !(opts && opts.open === true)) d.classList.add("ed-adv");
+      return body;
+    },
+    teach(parent, key) {     // an empty panel that explains itself
+      const t = TEACH[key]; if (!t) return;
+      parent.appendChild(h("div", "ed-teach", '<div class="ed-teach-art" aria-hidden="true">' + t.art + "</div><div><b>" + esc(t.title) + "</b><p>" + t.text + "</p></div>"));
     },
     head(parent, title, sub) { const e = h("div", "ed-head", "<h2>" + esc(title) + "</h2>" + (sub ? "<p>" + esc(sub) + "</p>" : "")); parent.appendChild(e); return e; },
     note(parent, text, cls) { const e = h("p", "ed-note " + (cls || ""), esc(text)); parent.appendChild(e); return e; },
@@ -492,6 +580,7 @@
       parent.appendChild(w); return w;
     },
     list(parent, rows, opts) {    // a list of rows to pick from: [{ id, title, sub, color, icon, on }]
+      if (!rows.length && opts && opts.teach && TEACH[opts.teach]) { ED.ui.teach(parent, opts.teach); return h("div"); }
       const w = h("div", "ed-list");
       w.innerHTML = rows.length ? rows.map(r => '<button type="button" class="ed-row' + (r.on ? " on" : "") + (r.bad ? " bad" : "") + '" data-id="' + esc(r.id) + '"><span class="ed-dot" style="background:' + esc(r.color || "#9AA5AD") + '">' + (r.icon ? '<img src="' + r.icon + '" alt="">' : "") + '</span><span class="ed-rt"><b>' + esc(r.title) + "</b>" + (r.sub ? "<small>" + esc(r.sub) + "</small>" : "") + "</span>" + (r.badge ? '<span class="ed-pill">' + esc(r.badge) + "</span>" : "") + "</button>").join("") : '<div class="ed-empty">' + esc((opts && opts.empty) || "Nothing here yet.") + "</div>";
       w.querySelectorAll("[data-id]").forEach(b => b.addEventListener("click", () => opts.onPick(b.dataset.id)));
@@ -526,7 +615,7 @@
   // Errors would break the map, so Publish refuses them. Warnings are worth a look but don't stop Publish.
   const FOUND = new Set();        // files already found on the website, so each Publish doesn't check them all again
   ED.check = async function (opts) {
-    const D = ED.data, out = [];
+    const D = ED.data, out = [], S = k => (D.site && D.site[k]) || "";
     const err = (where, msg, go) => out.push({ level: "error", where, msg, go });
     const warn = (where, msg, go) => out.push({ level: "warn", where, msg, go });
     const ids = new Map();
@@ -579,6 +668,21 @@
       if (!["once", "yearly", "monthly", "weekly", "ongoing", ""].includes(rep)) err(where, "Its repeat setting \"" + r.REPEAT + "\" isn't one the map knows.");
       if ((rep === "once" || rep === "yearly" || rep === "") && !r.START) warn(where, "It has no start date.");
     });
+    // ready to share? things that make a map look unfinished (warnings only)
+    if (!EVENT) {
+      const R = (msg, go) => out.push({ level: "warn", where: "Ready to Share", msg, go });
+      const placesOnMap = D.items.filter(i => isFinite(parseFloat(i.LAT)) && isFinite(parseFloat(i.LONG)));
+      if (!S("PLACE")) R("The map has no name. Set it in Look, under Name, Badge and Colors.");
+      if (!/\S/.test(S("EVENT_TEXT")) || /^Tap a place\. Its card slides up/.test(S("EVENT_TEXT"))) R("The About text is still the standard one. Say who made the map and why, in Look, under About This Map.");
+      const unnamed = D.items.filter(i => /^New (Place|Story|Photo Spot)$/.test(i.NAME || ""));
+      if (unnamed.length) R(unnamed.length + (unnamed.length > 1 ? " items are" : " item is") + " still called \"" + unnamed[0].NAME + "\".", unnamed[0].ID);
+      const withPhoto = new Set(D.media.filter(m => !/audio|video/i.test(m.KIND || "")).map(m => m.ITEM_ID));
+      const noPhoto = placesOnMap.filter(i => (i.KIND || "place") !== "story" && !withPhoto.has(i.ID));
+      if (noPhoto.length) R(noPhoto.length + " of " + placesOnMap.length + " places have no photo yet. Photos are what visitors tap for.", noPhoto[0].ID);
+      const noCat = placesOnMap.filter(i => (i.KIND || "place") === "place" && !i.CATEGORY && !i.PART_OF);
+      if (noCat.length) R(noCat.length + (noCat.length > 1 ? " places have" : " place has") + " no category, so " + (noCat.length > 1 ? "they" : "it") + " can't be filtered.", noCat[0].ID);
+      if (placesOnMap.length && !["BOUNDS_WEST", "BOUNDS_SOUTH", "BOUNDS_EAST", "BOUNDS_NORTH"].every(k => isFinite(parseFloat(S(k))))) R("There's no visitor area, so visitors can scroll anywhere and Near Me works everywhere. Set one in Map, under Allowed Area.");
+    }
     // are the photos and audio really there?
     if (!opts || opts.files !== false) {
       const missing = [];
@@ -692,6 +796,7 @@
     EXTRA_FILES.forEach((t, p) => setDraft(p, null)); EXTRA_FILES.clear();
     PENDING.forEach((b, p) => idb.del(p)); PENDING.clear();
     UNDO.length = 0; setWipe(false);
+    try { localStorage.setItem(KEY("did_publish"), "1"); } catch (e) { /* fine */ }
     $("edSaved").textContent = "Published";
   }
 
@@ -822,6 +927,7 @@
 
   /* ---------- 8. Start-up ---------- */
   ED.preview = function () {
+    try { localStorage.setItem(KEY("did_preview"), "1"); } catch (e) { /* fine */ }
     const u = new URL("index.html", location.href);
     u.searchParams.set("draft", "1"); u.searchParams.set("intro", "0");
     if (SAMPLE) u.searchParams.set("sample", SAMPLE);
@@ -871,6 +977,7 @@
     if (ED.restoredDrafts) ED.toast("Your unpublished changes from before are still here. Publish when ready, or throw them away with Discard All Changes in the Publish window.", 6000);
     if (ED.catchingUp) ED.toast("GitHub is still updating the website with your last publish. You're seeing what you published.", 6000);
     if (ED.problems.length) ED.toast(ED.problems[0], 6000);
+    applyMode();
     ED.ready = true;
   };
   // Copy an event's changed files over the live map's files (asks first)
