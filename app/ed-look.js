@@ -114,10 +114,11 @@
   function startOverDialog() {
     const esc = ED.esc;
     ED.modal("<h2>Start Over With a Blank Map</h2>" +
-      '<div class="ed-alert bad"><b>This empties the whole map.</b> Every place, category, photo, tour, happening, passport setting, old map, interior and look setting goes. Your GitHub settings stay.</div>' +
+      '<div class="ed-alert bad"><b>This empties the whole map.</b> Every place, category, photo, tour, happening, passport setting, old map, interior and look setting goes. Your GitHub settings, icons and marker shapes stay.</div>' +
       "<p>The data files are written over with blank ones. The folders " + ED.WIPE_FOLDERS.map(d => "<b>" + esc(d) + "</b>").join(", ") + " are deleted when you publish. Photos you uploaded but haven't published are thrown away.</p>" +
       "<p><b>Nothing changes on the website until you publish.</b> Before that, Undo or Discard All Changes puts it all back.</p>" +
       '<div class="ed-btnrow"><button type="button" class="ed-btn" data-backup="1">Download a Backup First</button></div><small class="ed-help" data-bmsg></small>' +
+      '<label class="ed-toggle"><input type="checkbox" data-icons><span class="ed-switch"></span><span class="ed-tl"><b>Remove My Icons and Marker Shapes Too</b><small>Off: the icons and shapes stay, ready for the new map.</small></span></label>' +
       '<label class="ed-field"><span class="ed-label">Type START OVER to Confirm</span><input class="ed-input" data-word autocomplete="off" spellcheck="false"></label>' +
       '<div class="ed-btnrow end"><button type="button" class="ed-btn" data-no="1">Cancel</button><button type="button" class="ed-btn ed-danger" data-yes="1" disabled>Start Over</button></div>', (m, close) => {
       const word = m.querySelector("[data-word]"), yes = m.querySelector("[data-yes]"), bmsg = m.querySelector("[data-bmsg]");
@@ -130,7 +131,7 @@
         e.target.disabled = false;
       });
       yes.addEventListener("click", () => {
-        close(); ED.startOver();
+        const icons = m.querySelector("[data-icons]").checked; close(); ED.startOver({ icons });
         ED.toast("The map is blank. Publish to make it official. Changed your mind? Press Undo.", 7000);
         if (ED.runSetup) setTimeout(() => ED.runSetup(), 300);
       });

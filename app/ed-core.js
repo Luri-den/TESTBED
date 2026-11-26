@@ -180,18 +180,20 @@
   let WIPE = false; try { WIPE = localStorage.getItem(wipeKey()) === "1"; } catch (e) { /* fine */ }
   function setWipe(on) { WIPE = !!on; try { if (on) localStorage.setItem(wipeKey(), "1"); else localStorage.removeItem(wipeKey()); } catch (e) { /* fine */ } updateCount(); }
   ED.wipePending = () => WIPE; ED.WIPE_FOLDERS = WIPE_FOLDERS;
-  ED.startOver = function () {
+  ED.startOver = function (opts) {
     if (EVENT) return;
+    const keepIcons = !(opts && opts.icons);
     const snap = { name: "*startover", label: "Start Over", texts: {}, pending: [...PENDING.entries()], extra: [...EXTRA_FILES.entries()], wipe: WIPE };
     FILES.forEach(n => {
       const f = F[n]; snap.texts[n] = f.text;
+      if (n === "icons.json" && keepIcons) return;        // icons and marker shapes are tools, not map data
       const blank = load1(n, null); Object.assign(f, { cols: blank.cols, rows: blank.rows, data: blank.data });
       f.text = serialize(f); setDraft(f.path, f.text === f.orig ? null : f.text);
     });
     PENDING.forEach((b, p) => idb.del(p)); PENDING.clear();          // unpublished uploads would land in the deleted folders
     EXTRA_FILES.forEach((t, p) => setDraft(p, null)); EXTRA_FILES.clear();
     UNDO.push(snap);
-    try { localStorage.removeItem(KEY("setup_done")); } catch (e) { /* fine */ }
+    try { ["setup_done", "tut_at", "tut_place", "tut_cat"].forEach(k => localStorage.removeItem(KEY(k))); sessionStorage.removeItem(KEY("tut_later")); } catch (e) { /* fine */ }
     setWipe(true);
     ED.selected = null; ED.closeInspector && ED.closeInspector();
     afterChange("all"); rerender();
@@ -508,7 +510,7 @@
   };
   // A window over the editor (Publish, confirmations)
   ED.modal = function (html, wire, opts) {
-    const back = $("edModal"); back.hidden = false;
+    const back = $("edModal"); back.hidden = false; back.className = "ed-modal-back";
     back.innerHTML = '<div class="ed-modal' + (opts && opts.wide ? " wide" : "") + '" role="dialog" aria-modal="true"><button type="button" class="ed-x" aria-label="Close">✕</button>' + html + "</div>";
     const close = () => { back.hidden = true; back.innerHTML = ""; document.removeEventListener("keydown", key, true); };
     const key = e => { if (e.key === "Escape") { e.stopPropagation(); close(); } };

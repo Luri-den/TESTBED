@@ -240,3 +240,54 @@ body { display: flex; flex-direction: column; }
 .su-res { margin-top: 8px; max-height: 220px; overflow-y: auto; }
 
 .ed-table { width: 100%; border-collapse: collapse; font-size: 12px; } .ed-table th, .ed-table td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* setup: once the area is picked, the window steps aside so the map shows the place */
+.ed-modal-back.su-peek { background: transparent; pointer-events: none; justify-content: flex-end; align-items: flex-start; padding: 76px 20px 20px; }
+.ed-modal-back.su-peek .ed-modal { pointer-events: auto; max-width: 400px; max-height: calc(100vh - 96px); box-shadow: 0 12px 40px rgba(0,0,0,.28); }
+@media (max-width: 700px) { .ed-modal-back.su-peek { align-items: flex-end; justify-content: center; padding: 12px; } .ed-modal-back.su-peek .ed-modal { max-height: 52vh; } }
+
+/* ---------- the tutorial ---------- */
+.ed-modal-back.tut-hidden { display: none; }
+.tut-card-box { max-width: 430px; }
+.ed-modal-back.su-peek .ed-modal.tut-wide { max-width: 560px; }
+.tut-head { margin: 0 44px 10px 0; }
+.tut-part { font-size: 12px; font-weight: 800; letter-spacing: .02em; color: var(--accent); }
+.tut-bar { height: 5px; border-radius: 9px; background: var(--surface-2); margin-top: 6px; overflow: hidden; }
+.tut-bar span { display: block; height: 100%; background: var(--accent); border-radius: 9px; transition: width .3s; }
+.tut-count { display: block; color: var(--muted); font-weight: 700; margin: -4px 0 8px; }
+.tut-card-box p { margin: 0 0 10px; line-height: 1.5; }
+.tut-list { margin: 0 0 12px; padding-left: 20px; line-height: 1.5; } .tut-list li { margin-bottom: 4px; }
+.tut-tip-line { font-size: 13px; color: var(--muted); background: var(--surface-2); border-radius: 12px; padding: 10px 12px; margin: 12px 0 0 !important; }
+.tut-card-box .ed-label { display: block; margin: 12px 0 6px; }
+.tut-seg { flex-wrap: wrap; }
+.tut-foot { margin-top: 16px; position: sticky; bottom: -24px; background: var(--surface); padding: 10px 0 2px; }
+.tut-foot .ed-grow { flex: 1; }
+.tut-later { color: var(--muted); }
+.tut-sugg { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tut-dot { display: inline-block; width: 10px; height: 10px; border-radius: 9px; margin-right: 6px; vertical-align: -1px; }
+.tut-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 14px 0 0; }
+.tut-chips span { padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; background: var(--surface-2); }
+.tut-chips span.on { background: var(--a); color: #fff; }
+.tut-chips span.btn { background: var(--a); color: #fff; border-radius: 10px; }
+.tut-mk { display: inline-grid; place-items: center; background: var(--c); overflow: hidden; position: relative; flex: none; }
+.tut-mk img { width: 62%; height: 62%; filter: brightness(0) invert(1); }
+.tut-mk .tm-fill { position: absolute; inset: 0; background-size: cover; }
+.tut-preview { display: flex; align-items: center; gap: 14px; margin-top: 14px; padding: 10px; border-radius: 14px; background: var(--surface-2); }
+.tut-prev-map { width: 86px; height: 86px; border-radius: 12px; display: grid; place-items: center; background: #DDE5DF repeating-linear-gradient(45deg, transparent 0 14px, rgba(255,255,255,.35) 14px 16px); }
+.tut-prev-map .tut-mk { filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
+.tut-preview small { color: var(--muted); line-height: 1.4; }
+.tut-shapes { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 6px; }
+.tut-shapes button { display: grid; justify-items: center; gap: 4px; padding: 8px 2px 6px; border-radius: 12px; border: 2px solid transparent; background: var(--surface-2); }
+.tut-shapes button[aria-pressed="true"] { border-color: var(--text); }
+.tut-shapes small { font-size: 11px; font-weight: 700; }
+.tut-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 8px; }
+.tut-card { border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.tut-card p { font-size: 13px; color: var(--muted); margin: 0 !important; flex: 1; line-height: 1.45; }
+.tut-card .ed-btn { align-self: flex-start; }
+.tut-cards.help { max-height: 46vh; overflow-y: auto; margin-top: 10px; }
+.tut-parts { flex-wrap: wrap; }
+.tut-ring { position: fixed; z-index: 80; border-radius: 14px; box-shadow: 0 0 0 4px var(--accent), 0 0 0 9999px rgba(10,14,16,.35); pointer-events: none; animation: tutPulse 1.4s ease-in-out infinite; }
+@keyframes tutPulse { 50% { box-shadow: 0 0 0 8px var(--accent), 0 0 0 9999px rgba(10,14,16,.35); } }
+@media (prefers-reduced-motion: reduce) { .tut-ring { animation: none; } }
+.tut-bubble { position: fixed; z-index: 81; background: var(--surface); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); }
+.tut-bubble p { margin: 6px 0 10px; font-size: 14px; line-height: 1.45; }

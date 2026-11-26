@@ -15,9 +15,20 @@
       map.addSource("ed-outline", { type: "geojson", data: outlineData() });
       map.addLayer({ id: "ed-outline", type: "line", source: "ed-outline", paint: { "line-color": ["coalesce", ["get", "stroke"], "#0B7A75"], "line-width": 3, "line-dasharray": [2, 1.5] } });
       map.addSource("ed-bounds", { type: "geojson", data: boundsData() });
+      styleLayer(map);
       map.addLayer({ id: "ed-bounds", type: "line", source: "ed-bounds", paint: { "line-color": "#B91C1C", "line-width": 2, "line-opacity": 0.7 } });
     }
     drawImages();
+  }
+  // the editor shows the outline the way visitors will: dotted, dashed or solid, at its width
+  function styleLayer(map) {
+    const o = mapData().outline, f = o ? (o.type === "FeatureCollection" ? o.features[0] : o) : null, p = (f && f.properties) || {};
+    const dash = String(p["stroke-dasharray"] || "").toLowerCase();
+    try {
+      map.setPaintProperty("ed-outline", "line-dasharray", dash === "dotted" ? [0.1, 2] : dash === "dashed" ? [3, 2] : [1, 0]);
+      map.setPaintProperty("ed-outline", "line-width", Math.min(+p["stroke-width"] || 3, 10));
+      if (map.setLayoutProperty) map.setLayoutProperty("ed-outline", "line-cap", "round");
+    } catch (e) { /* the layer isn't there yet */ }
   }
   function outlineData() { const o = mapData().outline; return o || { type: "FeatureCollection", features: [] }; }
   function boundsData() {
@@ -27,7 +38,7 @@
   }
   function refresh() {
     const m = ED.map; if (!m || !m.getSource) return;
-    const o = m.getSource("ed-outline"); if (o) o.setData(outlineData());
+    const o = m.getSource("ed-outline"); if (o) { o.setData(outlineData()); styleLayer(m); }
     const b = m.getSource("ed-bounds"); if (b) b.setData(boundsData());
     drawImages(); drawPins();
   }
@@ -168,11 +179,12 @@
     if (!interior) overlaysSection(side);
     else if (!bd) ui.note(side, "Start by adding the indoor plan above.");
   }
-  ED.useOutline = f => useOutline(f);
-  function useOutline(f) {
+  ED.useOutline = (f, quiet) => useOutline(f, quiet);
+  function useOutline(f, quiet) {
     let ring = f.geometry.type === "Polygon" ? f.geometry.coordinates[0] : f.geometry.coordinates.slice().sort((a, b) => b[0].length - a[0].length)[0][0];
     const step = Math.max(1, Math.ceil(ring.length / 400)); ring = ring.filter((_, i) => i % step === 0 || i === ring.length - 1).map(c => [+c[0].toFixed(5), +c[1].toFixed(5)]);
     editMap(d => { d.outline = { type: "FeatureCollection", features: [{ type: "Feature", properties: { stroke: S("BAR_COLOR") || "#0B7A75", "stroke-width": 4, "stroke-dasharray": "dotted" }, geometry: { type: "Polygon", coordinates: [ring] } }] }; }, "outline");
+    if (quiet) return;           // the setup moves the map itself
     ED.map.fitBounds(ED.bounds(ring), { padding: 40, duration: 600 });
     ED.rerender(); ED.toast("Outline added. Use Adjust the Points to fine-tune it.");
   }
